@@ -9,6 +9,7 @@ from utils.highscore import get_highscore_filename, load_highscore, save_highsco
 from ui.menu import draw_menu
 from ui.custom_input import draw_custom_input
 from ui.game_screen import draw_maze
+from collections import defaultdict
 
 # Directions: (dy, dx)
 DIRS = {'UP': (-1, 0), 'DOWN': (1, 0), 'LEFT': (0, -1), 'RIGHT': (0, 1)}
@@ -39,7 +40,7 @@ def reset_maze(h, w, cell_size):
     steps = 0
     start_time = pygame.time.get_ticks()
     solve_time = None
-    trail = set()
+    trail = defaultdict(int)
     return maze, finished, steps, start_time, solve_time, trail
 
 def main():
@@ -68,7 +69,7 @@ def main():
     steps = 0
     start_time = 0
     solve_time = None
-    trail = set()
+    trail = defaultdict(int)
     hover_idx = None
     current_diff = 'Beginner'
     current_highscore = None
@@ -286,13 +287,13 @@ def main():
                     last_move_time = now
                     if moved:
                         steps += 1
-                        trail.add(tuple(maze.player))
+                        trail[tuple(maze.player)] += 1
             screen.fill(BG_COLOR)
             draw_maze(screen, maze, trail if show_trail else None)
             font = pygame.font.SysFont(None, 28)
             elapsed = (solve_time if solve_time is not None else now) - start_time
             elapsed_sec = elapsed // 1000
-            # Draw screen resolution and stats stacked vertically
+            # Draw screen t and stats stacked vertically
             y = 0
             res_str = f"Resolution: {screen.get_width()}x{screen.get_height()}"
             res_font = pygame.font.SysFont(None, 28)

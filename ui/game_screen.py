@@ -19,9 +19,14 @@ def draw_maze(screen, maze, trail=None):
                 pygame.draw.rect(screen, PATH_COLOR, rect)
     # Draw trail if enabled
     if trail:
-        trail_surf = pygame.Surface((maze.cell_size, maze.cell_size), pygame.SRCALPHA)
-        trail_surf.fill(PLAYER_TRAIL_COLOR)
-        for (ty, tx) in trail:
+        base_alpha = 40
+        step = 40
+        max_alpha = 200
+        for (ty, tx), count in trail.items():
+            alpha = min(base_alpha + count * step, max_alpha)
+            trail_color = (*PLAYER_TRAIL_COLOR[:3], alpha)
+            trail_surf = pygame.Surface((maze.cell_size, maze.cell_size), pygame.SRCALPHA)
+            trail_surf.fill(trail_color)
             screen.blit(trail_surf, (offset_x + tx * maze.cell_size, offset_y + ty * maze.cell_size))
     # Draw player
     py, px = maze.player
