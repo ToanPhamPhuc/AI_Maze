@@ -113,7 +113,7 @@ def reset_maze(h, w, cell_size):
     trail = set()
     return maze, finished, steps, start_time, solve_time, trail
 
-def draw_menu(screen, selected_idx):
+def draw_menu(screen, selected_idx, hover_idx=None):
     screen.fill(BG_COLOR)
     font = pygame.font.SysFont(None, 48)
     small_font = pygame.font.SysFont(None, 32)
@@ -125,11 +125,15 @@ def draw_menu(screen, selected_idx):
         "Custom"
     ]
     screen.blit(title, (screen.get_width()//2 - title.get_width()//2, 100))
+    option_rects = []
     for i, opt in enumerate(options):
-        color = (255,255,255) if i == selected_idx else (180,180,180)
+        color = (255,255,255) if i == selected_idx or (hover_idx is not None and i == hover_idx) else (180,180,180)
         surf = small_font.render(opt, True, color)
-        screen.blit(surf, (screen.get_width()//2 - surf.get_width()//2, 200 + i*60))
+        rect = surf.get_rect(center=(screen.get_width()//2, 220 + i*60))
+        screen.blit(surf, rect)
+        option_rects.append(rect)
     pygame.display.flip()
+    return option_rects
 
 def draw_custom_input(screen, width_str, height_str, active_field):
     screen.fill(BG_COLOR)
@@ -175,9 +179,15 @@ def main():
     start_time = 0
     solve_time = None
     trail = set()
+    hover_idx = None
     while True:
         if menu_state == 'menu':
-            draw_menu(screen, selected_idx)
+            option_rects = draw_menu(screen, selected_idx, hover_idx)
+            mouse_pos = pygame.mouse.get_pos()
+            hover_idx = None
+            for i, rect in enumerate(option_rects):
+                if rect.collidepoint(mouse_pos):
+                    hover_idx = i
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -188,16 +198,35 @@ def main():
                     elif event.key == pygame.K_DOWN:
                         selected_idx = (selected_idx + 1) % 4
                     elif event.key == pygame.K_RETURN:
-                        if selected_idx == 0:
+                        idx = selected_idx
+                        if idx == 0:
                             h, w = 8, 8
                             menu_state = 'game'
-                        elif selected_idx == 1:
+                        elif idx == 1:
                             h, w = 16, 16
                             menu_state = 'game'
-                        elif selected_idx == 2:
+                        elif idx == 2:
                             h, w = 16, 30
                             menu_state = 'game'
-                        elif selected_idx == 3:
+                        elif idx == 3:
+                            menu_state = 'custom'
+                            width_str = ''
+                            height_str = ''
+                            active_field = 'width'
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if hover_idx is not None:
+                        selected_idx = hover_idx
+                        idx = selected_idx
+                        if idx == 0:
+                            h, w = 8, 8
+                            menu_state = 'game'
+                        elif idx == 1:
+                            h, w = 16, 16
+                            menu_state = 'game'
+                        elif idx == 2:
+                            h, w = 16, 30
+                            menu_state = 'game'
+                        elif idx == 3:
                             menu_state = 'custom'
                             width_str = ''
                             height_str = ''
