@@ -1,6 +1,21 @@
 import pygame
 from configs.config import BG_COLOR, MENU_OPTIONS
 
+def format_time(seconds):
+    d = seconds // 86400
+    h = (seconds % 86400) // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    parts = []
+    if d > 0:
+        parts.append(f"{d}d")
+    if h > 0 or d > 0:
+        parts.append(f"{h}h")
+    if m > 0 or h > 0 or d > 0:
+        parts.append(f"{m}m")
+    parts.append(f"{s}s")
+    return ''.join(parts)
+
 def draw_menu(screen, selected_idx, hover_idx=None, highscores=None):
     screen.fill(BG_COLOR)
     font = pygame.font.SysFont(None, 48)
@@ -19,7 +34,7 @@ def draw_menu(screen, selected_idx, hover_idx=None, highscores=None):
         if highscores and i < 4:
             hs = highscores.get(opt.split()[0], None)
             if hs and hs[0] is not None:
-                hs_surf = small_font.render(f"Best: {hs[0]}s, {hs[1]} steps", True, (0,255,0))
+                hs_surf = small_font.render(f"Best: {format_time(hs[0])}, {hs[1]} steps", True, (0,255,0))
                 screen.blit(hs_surf, (screen.get_width()//2 + 180, 220 + i*60 - 16))
     pygame.display.flip()
     return option_rects 

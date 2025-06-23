@@ -43,6 +43,21 @@ def reset_maze(h, w, cell_size):
     trail = defaultdict(int)
     return maze, finished, steps, start_time, solve_time, trail
 
+def format_time(seconds):
+    d = seconds // 86400
+    h = (seconds % 86400) // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    parts = []
+    if d > 0:
+        parts.append(f"{d}d")
+    if h > 0 or d > 0:
+        parts.append(f"{h}h")
+    if m > 0 or h > 0 or d > 0:
+        parts.append(f"{m}m")
+    parts.append(f"{s}s")
+    return ''.join(parts)
+
 def main():
     print('--- Maze Game (Pygame) ---')
     pygame.init()
@@ -303,7 +318,7 @@ def main():
             steps_surf = font.render(f"Steps: {steps}", True, (255,255,255))
             screen.blit(steps_surf, (10, y))
             y += steps_surf.get_height() + 5
-            time_surf = font.render(f"Time: {elapsed_sec}s", True, (255,255,255))
+            time_surf = font.render(f"Time: {format_time(elapsed_sec)}", True, (255,255,255))
             screen.blit(time_surf, (10, y))
             y += time_surf.get_height() + 5
             diff_str = current_diff if current_diff != 'Custom' else f'Custom {w}x{h}'
@@ -312,7 +327,7 @@ def main():
             y += diff_surf.get_height() + 5
             hs_val = current_highscore if current_diff != 'Custom' else custom_hs
             if hs_val and hs_val[0] is not None:
-                hs_surf = font.render(f"Best: {hs_val[0]}s, {hs_val[1]} steps", True, (0,255,0))
+                hs_surf = font.render(f"Best: {format_time(hs_val[0])}", True, (0,255,0))
                 screen.blit(hs_surf, (10, y))
                 y += hs_surf.get_height() + 5
             hint_alpha = 80 if not show_trail else 200
@@ -326,7 +341,7 @@ def main():
                 screen.blit(overlay, (0, 0))
                 big_font = pygame.font.SysFont(None, 48)
                 msg1 = big_font.render("Congratulations!", True, (255,255,0))
-                msg2 = font.render(f"Solved in {steps} steps, {elapsed_sec} seconds", True, (255,255,255))
+                msg2 = font.render(f"Solved in {steps} steps, {format_time(elapsed_sec)}", True, (255,255,255))
                 msg3 = font.render("Press R for a new maze", True, (255,255,255))
                 screen.blit(msg1, (screen.get_width()//2 - msg1.get_width()//2, screen.get_height()//2 - 60))
                 screen.blit(msg2, (screen.get_width()//2 - msg2.get_width()//2, screen.get_height()//2))
