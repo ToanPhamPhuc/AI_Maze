@@ -1,6 +1,7 @@
 import pygame
 import sys
 import random
+import os
 
 # Directions: (dy, dx)
 DIRS = {'UP': (-1, 0), 'DOWN': (1, 0), 'LEFT': (0, -1), 'RIGHT': (0, 1)}
@@ -113,7 +114,35 @@ def reset_maze(h, w, cell_size):
     trail = set()
     return maze, finished, steps, start_time, solve_time, trail
 
-def draw_menu(screen, selected_idx, hover_idx=None):
+# High score file helpers
+def get_highscore_filename(diff, w=None, h=None):
+    if diff == 'Beginner':
+        return 'BeginnerHighScore.txt'
+    elif diff == 'Intermediate':
+        return 'IntermediateHighScore.txt'
+    elif diff == 'Expert':
+        return 'ExpertHighScore.txt'
+    elif diff == 'Custom' and w and h:
+        return f'Custom{w}x{h}HighScore.txt'
+    return None
+
+def load_highscore(diff, w=None, h=None):
+    fname = get_highscore_filename(diff, w, h)
+    if fname and os.path.exists(fname):
+        try:
+            with open(fname, 'r') as f:
+                return int(f.read().strip())
+        except:
+            return None
+    return None
+
+def save_highscore(diff, score, w=None, h=None):
+    fname = get_highscore_filename(diff, w, h)
+    if fname:
+        with open(fname, 'w') as f:
+            f.write(str(score))
+
+def draw_menu(screen, selected_idx, hover_idx=None, highscores=None):
     screen.fill(BG_COLOR)
     font = pygame.font.SysFont(None, 48)
     small_font = pygame.font.SysFont(None, 32)
@@ -132,6 +161,12 @@ def draw_menu(screen, selected_idx, hover_idx=None):
         rect = surf.get_rect(center=(screen.get_width()//2, 220 + i*60))
         screen.blit(surf, rect)
         option_rects.append(rect)
+        # Draw high score for this diff
+        if highscores:
+            hs = highscores.get(opt.split()[0], None)
+            if hs is not None:
+                hs_surf = small_font.render(f"High Score: {hs}s", True, (0,255,0))
+                screen.blit(hs_surf, (screen.get_width()//2 + 180, 220 + i*60 - 16))
     pygame.display.flip()
     return option_rects
 
@@ -174,15 +209,27 @@ def main():
     move_dir = None
     move_delay = 120
     last_move_time = 0
-    show_trail = False
+    show_trail = True
     steps = 0
     start_time = 0
     solve_time = None
     trail = set()
     hover_idx = None
+    current_diff = 'Beginner'
+    current_highscore = None
+    highscores = {
+        'Beginner': load_highscore('Beginner'),
+        'Intermediate': load_highscore('Intermediate'),
+        'Expert': load_highscore('Expert'),
+    }
+    custom_hs = None
     while True:
         if menu_state == 'menu':
-            option_rects = draw_menu(screen, selected_idx, hover_idx)
+            # Update high scores for menu
+            highscores['Beginner'] = load_highscore('Beginner')
+            highscores['Intermediate'] = load_highscore('Intermediate')
+            highscores['Expert'] = load_highscore('Expert')
+            option_rects = draw_menu(screen, selected_idx, hover_idx, highscores)
             mouse_pos = pygame.mouse.get_pos()
             hover_idx = None
             for i, rect in enumerate(option_rects):
@@ -201,12 +248,18 @@ def main():
                         idx = selected_idx
                         if idx == 0:
                             h, w = 8, 8
+                            current_diff = 'Beginner'
+                            current_highscore = highscores['Beginner']
                             menu_state = 'game'
                         elif idx == 1:
                             h, w = 16, 16
+                            current_diff = 'Intermediate'
+                            current_highscore = highscores['Intermediate']
                             menu_state = 'game'
                         elif idx == 2:
                             h, w = 16, 30
+                            current_diff = 'Expert'
+                            current_highscore = highscores['Expert']
                             menu_state = 'game'
                         elif idx == 3:
                             menu_state = 'custom'
@@ -219,12 +272,18 @@ def main():
                         idx = selected_idx
                         if idx == 0:
                             h, w = 8, 8
+                            current_diff = 'Beginner'
+                            current_highscore = highscores['Beginner']
                             menu_state = 'game'
                         elif idx == 1:
                             h, w = 16, 16
+                            current_diff = 'Intermediate'
+                            current_highscore = highscores['Intermediate']
                             menu_state = 'game'
                         elif idx == 2:
                             h, w = 16, 30
+                            current_diff = 'Expert'
+                            current_highscore = highscores['Expert']
                             menu_state = 'game'
                         elif idx == 3:
                             menu_state = 'custom'
@@ -245,6 +304,9 @@ def main():
                             w = int(width_str)
                             h = int(height_str)
                             if w >= 3 and h >= 3:
+                                current_diff = 'Custom'
+                                custom_hs = load_highscore('Custom', w, h)
+                                current_highscore = custom_hs
                                 menu_state = 'game'
                             else:
                                 width_str = ''
@@ -276,7 +338,7 @@ def main():
             menu_state = 'playing'
             move_dir = None
             last_move_time = 0
-            show_trail = False
+            show_trail = True
         elif menu_state == 'playing':
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -311,11 +373,19 @@ def main():
             time_surf = font.render(f"Time: {elapsed_sec}s", True, (255,255,255))
             screen.blit(steps_surf, (10, 10))
             screen.blit(time_surf, (10, 40))
+            # Show current diff and high score
+            diff_str = current_diff if current_diff != 'Custom' else f'Custom {w}x{h}'
+            diff_surf = font.render(f"Current: {diff_str}", True, (255,255,0))
+            screen.blit(diff_surf, (10, 70))
+            hs_val = current_highscore if current_diff != 'Custom' else custom_hs
+            if hs_val is not None:
+                hs_surf = font.render(f"High Score: {hs_val}s", True, (0,255,0))
+                screen.blit(hs_surf, (10, 100))
             hint_alpha = 80 if not show_trail else 200
-            trail_hint_surf = font.render("Press T to show trail", True, (180,180,180))
+            trail_hint_surf = font.render("Press T to show trail", True, (255,0,0))
             trail_hint_surf = trail_hint_surf.convert_alpha()
             trail_hint_surf.set_alpha(hint_alpha)
-            screen.blit(trail_hint_surf, (10, 70))
+            screen.blit(trail_hint_surf, (10, 130))
             if finished:
                 overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
                 overlay.fill((0, 0, 0, 160))
@@ -331,6 +401,19 @@ def main():
             if not finished and maze.is_finished():
                 finished = True
                 solve_time = pygame.time.get_ticks() - start_time
+                # Update high score if beaten
+                if current_diff == 'Custom':
+                    prev = load_highscore('Custom', w, h)
+                    if prev is None or elapsed_sec < prev:
+                        save_highscore('Custom', elapsed_sec, w, h)
+                        custom_hs = elapsed_sec
+                        current_highscore = elapsed_sec
+                else:
+                    prev = load_highscore(current_diff)
+                    if prev is None or elapsed_sec < prev:
+                        save_highscore(current_diff, elapsed_sec)
+                        highscores[current_diff] = elapsed_sec
+                        current_highscore = elapsed_sec
             clock.tick(60)
 
 if __name__ == '__main__':
