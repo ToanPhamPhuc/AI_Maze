@@ -102,14 +102,29 @@ def main():
     pygame.display.set_caption('Maze Game')
     clock = pygame.time.Clock()
     finished = False
+    move_dir = None
+    move_delay = 120  # milliseconds between moves when holding
+    last_move_time = 0
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if not finished and event.type == pygame.KEYDOWN:
-                if event.key in KEY_TO_DIR:
-                    maze.move_player(KEY_TO_DIR[event.key])
+            if not finished:
+                if event.type == pygame.KEYDOWN:
+                    if event.key in KEY_TO_DIR:
+                        move_dir = KEY_TO_DIR[event.key]
+                        last_move_time = 0  # move immediately
+                if event.type == pygame.KEYUP:
+                    if event.key in KEY_TO_DIR and move_dir == KEY_TO_DIR[event.key]:
+                        move_dir = None
+        now = pygame.time.get_ticks()
+        if not finished and move_dir:
+            if last_move_time == 0 or now - last_move_time >= move_delay:
+                if maze.move_player(move_dir):
+                    last_move_time = now
+                else:
+                    last_move_time = now  # still update to prevent rapid wall bumping
         screen.fill(BG_COLOR)
         draw_maze(screen, maze)
         pygame.display.flip()
