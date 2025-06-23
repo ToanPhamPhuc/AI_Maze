@@ -23,7 +23,7 @@ TRAIL_HINT_COLOR = (255, 0, 0)
 MOVE_DELAY = 120  # milliseconds between moves when holding
 
 # High score directory
-SCORES_DIR = 'scores'
+SCORES_DIR = 'GAME/scores'
 
 # Menu options
 MENU_OPTIONS = [
