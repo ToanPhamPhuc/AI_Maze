@@ -116,14 +116,17 @@ def reset_maze(h, w, cell_size):
 
 # High score file helpers
 def get_highscore_filename(diff, w=None, h=None):
+    base = 'scores'
+    if not os.path.exists(base):
+        os.makedirs(base)
     if diff == 'Beginner':
-        return 'BeginnerHighScore.txt'
+        return os.path.join(base, 'BeginnerHighScore.txt')
     elif diff == 'Intermediate':
-        return 'IntermediateHighScore.txt'
+        return os.path.join(base, 'IntermediateHighScore.txt')
     elif diff == 'Expert':
-        return 'ExpertHighScore.txt'
+        return os.path.join(base, 'ExpertHighScore.txt')
     elif diff == 'Custom' and w and h:
-        return f'Custom{w}x{h}HighScore.txt'
+        return os.path.join(base, f'Custom{w}x{h}HighScore.txt')
     return None
 
 def load_highscore(diff, w=None, h=None):
@@ -131,16 +134,22 @@ def load_highscore(diff, w=None, h=None):
     if fname and os.path.exists(fname):
         try:
             with open(fname, 'r') as f:
-                return int(f.read().strip())
+                line = f.read().strip()
+                if ',' in line:
+                    t, s = line.split(',')
+                    return int(t), int(s)
+                else:
+                    # Backward compatibility: only time stored
+                    return int(line), None
         except:
-            return None
-    return None
+            return None, None
+    return None, None
 
-def save_highscore(diff, score, w=None, h=None):
+def save_highscore(diff, time_score, steps_score, w=None, h=None):
     fname = get_highscore_filename(diff, w, h)
     if fname:
         with open(fname, 'w') as f:
-            f.write(str(score))
+            f.write(f'{time_score},{steps_score}')
 
 def draw_menu(screen, selected_idx, hover_idx=None, highscores=None):
     screen.fill(BG_COLOR)
@@ -151,7 +160,8 @@ def draw_menu(screen, selected_idx, hover_idx=None, highscores=None):
         "Beginner (8x8)",
         "Intermediate (16x16)",
         "Expert (30x16)",
-        "Custom"
+        "Custom",
+        "Quit"
     ]
     screen.blit(title, (screen.get_width()//2 - title.get_width()//2, 100))
     option_rects = []
@@ -162,10 +172,10 @@ def draw_menu(screen, selected_idx, hover_idx=None, highscores=None):
         screen.blit(surf, rect)
         option_rects.append(rect)
         # Draw high score for this diff
-        if highscores:
+        if highscores and i < 4:
             hs = highscores.get(opt.split()[0], None)
-            if hs is not None:
-                hs_surf = small_font.render(f"High Score: {hs}s", True, (0,255,0))
+            if hs and hs[0] is not None:
+                hs_surf = small_font.render(f"Best: {hs[0]}s, {hs[1]} steps", True, (0,255,0))
                 screen.blit(hs_surf, (screen.get_width()//2 + 180, 220 + i*60 - 16))
     pygame.display.flip()
     return option_rects
@@ -222,7 +232,7 @@ def main():
         'Intermediate': load_highscore('Intermediate'),
         'Expert': load_highscore('Expert'),
     }
-    custom_hs = None
+    custom_hs = (None, None)
     while True:
         if menu_state == 'menu':
             # Update high scores for menu
@@ -241,9 +251,9 @@ def main():
                     sys.exit()
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_UP:
-                        selected_idx = (selected_idx - 1) % 4
+                        selected_idx = (selected_idx - 1) % 5
                     elif event.key == pygame.K_DOWN:
-                        selected_idx = (selected_idx + 1) % 4
+                        selected_idx = (selected_idx + 1) % 5
                     elif event.key == pygame.K_RETURN:
                         idx = selected_idx
                         if idx == 0:
@@ -266,6 +276,9 @@ def main():
                             width_str = ''
                             height_str = ''
                             active_field = 'width'
+                        elif idx == 4:
+                            pygame.quit()
+                            sys.exit()
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if hover_idx is not None:
                         selected_idx = hover_idx
@@ -290,6 +303,9 @@ def main():
                             width_str = ''
                             height_str = ''
                             active_field = 'width'
+                        elif idx == 4:
+                            pygame.quit()
+                            sys.exit()
         elif menu_state == 'custom':
             draw_custom_input(screen, width_str, height_str, active_field)
             for event in pygame.event.get():
@@ -378,8 +394,8 @@ def main():
             diff_surf = font.render(f"Current: {diff_str}", True, (255,255,0))
             screen.blit(diff_surf, (10, 70))
             hs_val = current_highscore if current_diff != 'Custom' else custom_hs
-            if hs_val is not None:
-                hs_surf = font.render(f"High Score: {hs_val}s", True, (0,255,0))
+            if hs_val and hs_val[0] is not None:
+                hs_surf = font.render(f"Best: {hs_val[0]}s, {hs_val[1]} steps", True, (0,255,0))
                 screen.blit(hs_surf, (10, 100))
             hint_alpha = 80 if not show_trail else 200
             trail_hint_surf = font.render("Press T to show trail", True, (255,0,0))
@@ -403,17 +419,27 @@ def main():
                 solve_time = pygame.time.get_ticks() - start_time
                 # Update high score if beaten
                 if current_diff == 'Custom':
-                    prev = load_highscore('Custom', w, h)
-                    if prev is None or elapsed_sec < prev:
-                        save_highscore('Custom', elapsed_sec, w, h)
-                        custom_hs = elapsed_sec
-                        current_highscore = elapsed_sec
+                    prev_time, prev_steps = load_highscore('Custom', w, h)
+                    update = False
+                    if prev_time is None or elapsed_sec < prev_time:
+                        update = True
+                    elif elapsed_sec == prev_time and (prev_steps is None or steps < prev_steps):
+                        update = True
+                    if update:
+                        save_highscore('Custom', elapsed_sec, steps, w, h)
+                        custom_hs = (elapsed_sec, steps)
+                        current_highscore = (elapsed_sec, steps)
                 else:
-                    prev = load_highscore(current_diff)
-                    if prev is None or elapsed_sec < prev:
-                        save_highscore(current_diff, elapsed_sec)
-                        highscores[current_diff] = elapsed_sec
-                        current_highscore = elapsed_sec
+                    prev_time, prev_steps = load_highscore(current_diff)
+                    update = False
+                    if prev_time is None or elapsed_sec < prev_time:
+                        update = True
+                    elif elapsed_sec == prev_time and (prev_steps is None or steps < prev_steps):
+                        update = True
+                    if update:
+                        save_highscore(current_diff, elapsed_sec, steps)
+                        highscores[current_diff] = (elapsed_sec, steps)
+                        current_highscore = (elapsed_sec, steps)
             clock.tick(60)
 
 if __name__ == '__main__':
