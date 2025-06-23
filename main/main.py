@@ -12,14 +12,15 @@ KEY_TO_DIR = {
 }
 
 CELL_SIZE = 24  # Default, will be recalculated
-MIN_SCREEN_W, MIN_SCREEN_H = 400, 400
-MAX_SCREEN_W, MAX_SCREEN_H = 1920, 1080
+MIN_SCREEN_W, MIN_SCREEN_H = 1366, 768
+MAX_SCREEN_W, MAX_SCREEN_H = 1536, 864
 WALL_COLOR = (40, 40, 40)
 PATH_COLOR = (220, 220, 220)
 PLAYER_COLOR = (0, 120, 255)
 EXIT_COLOR = (0, 200, 0)
 START_COLOR = (255, 200, 0)
 BG_COLOR = (30, 30, 30)
+PLAYER_TRAIL_COLOR = (0, 120, 255, 80)  # RGBA for semi-transparent trail
 
 class Maze:
     def __init__(self, height, width):
@@ -76,10 +77,14 @@ def get_maze_size():
         except ValueError:
             print('Invalid input. Please enter integers.')
 
-def draw_maze(screen, maze):
+def draw_maze(screen, maze, trail=None):
+    maze_pixel_w = len(maze.maze[0]) * CELL_SIZE
+    maze_pixel_h = len(maze.maze) * CELL_SIZE
+    offset_x = (screen.get_width() - maze_pixel_w) // 2 if screen.get_width() > maze_pixel_w else 0
+    offset_y = (screen.get_height() - maze_pixel_h) // 2 if screen.get_height() > maze_pixel_h else 0
     for y, row in enumerate(maze.maze):
         for x, cell in enumerate(row):
-            rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+            rect = pygame.Rect(offset_x + x * CELL_SIZE, offset_y + y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
             if cell == '#':
                 pygame.draw.rect(screen, WALL_COLOR, rect)
             elif cell == 'S':
@@ -88,9 +93,15 @@ def draw_maze(screen, maze):
                 pygame.draw.rect(screen, EXIT_COLOR, rect)
             else:
                 pygame.draw.rect(screen, PATH_COLOR, rect)
+    # Draw trail if enabled
+    if trail:
+        trail_surf = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+        trail_surf.fill(PLAYER_TRAIL_COLOR)
+        for (ty, tx) in trail:
+            screen.blit(trail_surf, (offset_x + tx * CELL_SIZE, offset_y + ty * CELL_SIZE))
     # Draw player
     py, px = maze.player
-    prect = pygame.Rect(px * CELL_SIZE, py * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+    prect = pygame.Rect(offset_x + px * CELL_SIZE, offset_y + py * CELL_SIZE, CELL_SIZE, CELL_SIZE)
     pygame.draw.rect(screen, PLAYER_COLOR, prect)
 
 def main():
@@ -119,6 +130,8 @@ def main():
     steps = 0
     start_time = pygame.time.get_ticks()
     solve_time = None
+    trail = set()
+    show_trail = False
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -135,6 +148,9 @@ def main():
                         steps = 0
                         start_time = pygame.time.get_ticks()
                         solve_time = None
+                        trail = set()
+                    if event.key == pygame.K_t:
+                        show_trail = not show_trail
                 if event.type == pygame.KEYUP:
                     if event.key in KEY_TO_DIR and move_dir == KEY_TO_DIR[event.key]:
                         move_dir = None
@@ -145,16 +161,20 @@ def main():
                     steps = 0
                     start_time = pygame.time.get_ticks()
                     solve_time = None
+                    trail = set()
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_t:
+                    show_trail = not show_trail
         now = pygame.time.get_ticks()
         if not finished and move_dir:
             if last_move_time == 0 or now - last_move_time >= move_delay:
                 if maze.move_player(move_dir):
                     last_move_time = now
                     steps += 1
+                    trail.add(tuple(maze.player))
                 else:
                     last_move_time = now  # still update to prevent rapid wall bumping
         screen.fill(BG_COLOR)
-        draw_maze(screen, maze)
+        draw_maze(screen, maze, trail if show_trail else None)
         # Draw stats
         font = pygame.font.SysFont(None, 28)
         elapsed = (solve_time if solve_time is not None else now) - start_time
