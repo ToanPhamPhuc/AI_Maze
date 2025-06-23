@@ -49,6 +49,7 @@ def main():
     pygame.display.set_caption('Maze Game')
     clock = pygame.time.Clock()
     fullscreen = False
+    maximized = False
     windowed_size = (MIN_SCREEN_W, MIN_SCREEN_H)
     # Menu state
     menu_state = 'menu'  # 'menu', 'custom', 'game'
@@ -124,12 +125,24 @@ def main():
                             pygame.quit()
                             sys.exit()
                     if event.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
-                        fullscreen = not fullscreen
-                        if fullscreen:
+                        if not fullscreen:
+                            fullscreen = True
+                            maximized = False
                             windowed_size = screen.get_size()
                             screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
                         else:
+                            fullscreen = False
                             screen = pygame.display.set_mode(windowed_size)
+                    elif event.key == pygame.K_F11:
+                        if not maximized:
+                            maximized = True
+                            fullscreen = False
+                            windowed_size = screen.get_size()
+                            info = pygame.display.Info()
+                            screen = pygame.display.set_mode((info.current_w, info.current_h))
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                        pygame.quit()
+                        sys.exit()
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if hover_idx is not None:
                         selected_idx = hover_idx
@@ -192,12 +205,24 @@ def main():
                         else:
                             height_str += event.unicode
                     if event.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
-                        fullscreen = not fullscreen
-                        if fullscreen:
+                        if not fullscreen:
+                            fullscreen = True
+                            maximized = False
                             windowed_size = screen.get_size()
                             screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
                         else:
+                            fullscreen = False
                             screen = pygame.display.set_mode(windowed_size)
+                    elif event.key == pygame.K_F11:
+                        if not maximized:
+                            maximized = True
+                            fullscreen = False
+                            windowed_size = screen.get_size()
+                            info = pygame.display.Info()
+                            screen = pygame.display.set_mode((info.current_w, info.current_h))
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                        pygame.quit()
+                        sys.exit()
         elif menu_state == 'game':
             # Calculate cell size and screen size
             maze_pixel_w = (2 * w + 1)
@@ -210,6 +235,9 @@ def main():
             screen = pygame.display.set_mode((screen_width, screen_height))
             if fullscreen:
                 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+            elif maximized:
+                info = pygame.display.Info()
+                screen = pygame.display.set_mode((info.current_w, info.current_h))
             maze, finished, steps, start_time, solve_time, trail = reset_maze(h, w, cell_size)
             menu_state = 'playing'
             move_dir = None
@@ -230,12 +258,24 @@ def main():
                     elif event.key == pygame.K_t:
                         show_trail = not show_trail
                     if event.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
-                        fullscreen = not fullscreen
-                        if fullscreen:
+                        if not fullscreen:
+                            fullscreen = True
+                            maximized = False
                             windowed_size = screen.get_size()
                             screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
                         else:
+                            fullscreen = False
                             screen = pygame.display.set_mode(windowed_size)
+                    elif event.key == pygame.K_F11:
+                        if not maximized:
+                            maximized = True
+                            fullscreen = False
+                            windowed_size = screen.get_size()
+                            info = pygame.display.Info()
+                            screen = pygame.display.set_mode((info.current_w, info.current_h))
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                        pygame.quit()
+                        sys.exit()
                 if event.type == pygame.KEYUP:
                     if event.key in KEY_TO_DIR and move_dir == KEY_TO_DIR[event.key]:
                         move_dir = None
@@ -252,23 +292,33 @@ def main():
             font = pygame.font.SysFont(None, 28)
             elapsed = (solve_time if solve_time is not None else now) - start_time
             elapsed_sec = elapsed // 1000
+            # Draw screen resolution and stats stacked vertically
+            y = 0
+            res_str = f"Resolution: {screen.get_width()}x{screen.get_height()}"
+            res_font = pygame.font.SysFont(None, 28)
+            res_surf = res_font.render(res_str, True, (255,255,255))
+            screen.blit(res_surf, (10, y))
+            y += res_surf.get_height() + 5
             steps_surf = font.render(f"Steps: {steps}", True, (255,255,255))
+            screen.blit(steps_surf, (10, y))
+            y += steps_surf.get_height() + 5
             time_surf = font.render(f"Time: {elapsed_sec}s", True, (255,255,255))
-            screen.blit(steps_surf, (10, 10))
-            screen.blit(time_surf, (10, 40))
-            # Show current diff and high score
+            screen.blit(time_surf, (10, y))
+            y += time_surf.get_height() + 5
             diff_str = current_diff if current_diff != 'Custom' else f'Custom {w}x{h}'
             diff_surf = font.render(f"Current: {diff_str}", True, (255,255,0))
-            screen.blit(diff_surf, (10, 70))
+            screen.blit(diff_surf, (10, y))
+            y += diff_surf.get_height() + 5
             hs_val = current_highscore if current_diff != 'Custom' else custom_hs
             if hs_val and hs_val[0] is not None:
                 hs_surf = font.render(f"Best: {hs_val[0]}s, {hs_val[1]} steps", True, (0,255,0))
-                screen.blit(hs_surf, (10, 100))
+                screen.blit(hs_surf, (10, y))
+                y += hs_surf.get_height() + 5
             hint_alpha = 80 if not show_trail else 200
             trail_hint_surf = font.render("Press T to show trail", True, (255,0,0))
             trail_hint_surf = trail_hint_surf.convert_alpha()
             trail_hint_surf.set_alpha(hint_alpha)
-            screen.blit(trail_hint_surf, (10, 130))
+            screen.blit(trail_hint_surf, (10, y))
             if finished:
                 overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
                 overlay.fill((0, 0, 0, 160))
