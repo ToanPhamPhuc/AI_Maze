@@ -48,6 +48,8 @@ def main():
     screen = pygame.display.set_mode((MIN_SCREEN_W, MIN_SCREEN_H))
     pygame.display.set_caption('Maze Game')
     clock = pygame.time.Clock()
+    fullscreen = False
+    windowed_size = (MIN_SCREEN_W, MIN_SCREEN_H)
     # Menu state
     menu_state = 'menu'  # 'menu', 'custom', 'game'
     selected_idx = 0
@@ -121,6 +123,13 @@ def main():
                         elif idx == 4:
                             pygame.quit()
                             sys.exit()
+                    if event.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
+                        fullscreen = not fullscreen
+                        if fullscreen:
+                            windowed_size = screen.get_size()
+                            screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                        else:
+                            screen = pygame.display.set_mode(windowed_size)
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if hover_idx is not None:
                         selected_idx = hover_idx
@@ -182,6 +191,13 @@ def main():
                             width_str += event.unicode
                         else:
                             height_str += event.unicode
+                    if event.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
+                        fullscreen = not fullscreen
+                        if fullscreen:
+                            windowed_size = screen.get_size()
+                            screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                        else:
+                            screen = pygame.display.set_mode(windowed_size)
         elif menu_state == 'game':
             # Calculate cell size and screen size
             maze_pixel_w = (2 * w + 1)
@@ -192,6 +208,8 @@ def main():
             screen_width = max(MIN_SCREEN_W, min(MAX_SCREEN_W, maze_pixel_w * cell_size))
             screen_height = max(MIN_SCREEN_H, min(MAX_SCREEN_H, maze_pixel_h * cell_size))
             screen = pygame.display.set_mode((screen_width, screen_height))
+            if fullscreen:
+                screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
             maze, finished, steps, start_time, solve_time, trail = reset_maze(h, w, cell_size)
             menu_state = 'playing'
             move_dir = None
@@ -211,6 +229,13 @@ def main():
                         selected_idx = 0
                     elif event.key == pygame.K_t:
                         show_trail = not show_trail
+                    if event.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
+                        fullscreen = not fullscreen
+                        if fullscreen:
+                            windowed_size = screen.get_size()
+                            screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                        else:
+                            screen = pygame.display.set_mode(windowed_size)
                 if event.type == pygame.KEYUP:
                     if event.key in KEY_TO_DIR and move_dir == KEY_TO_DIR[event.key]:
                         move_dir = None
