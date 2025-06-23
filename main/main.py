@@ -1,0 +1,122 @@
+import pygame
+import sys
+import random
+
+# Directions: (dy, dx)
+DIRS = {'UP': (-1, 0), 'DOWN': (1, 0), 'LEFT': (0, -1), 'RIGHT': (0, 1)}
+KEY_TO_DIR = {
+    pygame.K_UP: 'UP',
+    pygame.K_DOWN: 'DOWN',
+    pygame.K_LEFT: 'LEFT',
+    pygame.K_RIGHT: 'RIGHT',
+}
+
+CELL_SIZE = 24
+WALL_COLOR = (40, 40, 40)
+PATH_COLOR = (220, 220, 220)
+PLAYER_COLOR = (0, 120, 255)
+EXIT_COLOR = (0, 200, 0)
+START_COLOR = (255, 200, 0)
+BG_COLOR = (30, 30, 30)
+
+class Maze:
+    def __init__(self, height, width):
+        self.height = height
+        self.width = width
+        self.maze = [['#'] * (2 * width + 1) for _ in range(2 * height + 1)]
+        self._generate_maze()
+        self.start = (1, 1)
+        self.end = (2 * height - 1, 2 * width - 1)
+        self.player = list(self.start)
+
+    def _generate_maze(self):
+        visited = [[False] * self.width for _ in range(self.height)]
+        stack = [(0, 0)]
+        while stack:
+            y, x = stack[-1]
+            visited[y][x] = True
+            dirs = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+            random.shuffle(dirs)
+            found = False
+            for dy, dx in dirs:
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < self.height and 0 <= nx < self.width and not visited[ny][nx]:
+                    self.maze[y * 2 + 1 + dy][x * 2 + 1 + dx] = ' '
+                    self.maze[ny * 2 + 1][nx * 2 + 1] = ' '
+                    stack.append((ny, nx))
+                    found = True
+                    break
+            if not found:
+                stack.pop()
+        self.maze[1][1] = 'S'
+        self.maze[2 * self.height - 1][2 * self.width - 1] = 'E'
+
+    def move_player(self, direction):
+        dy, dx = DIRS[direction]
+        ny, nx = self.player[0] + dy, self.player[1] + dx
+        if 0 <= ny < len(self.maze) and 0 <= nx < len(self.maze[0]) and self.maze[ny][nx] != '#':
+            self.player = [ny, nx]
+            return True
+        return False
+
+    def is_finished(self):
+        return tuple(self.player) == self.end
+
+def get_maze_size():
+    while True:
+        try:
+            h = int(input('Enter maze height (min 3): '))
+            w = int(input('Enter maze width (min 3): '))
+            if h >= 3 and w >= 3:
+                return h, w
+            else:
+                print('Please enter values >= 3.')
+        except ValueError:
+            print('Invalid input. Please enter integers.')
+
+def draw_maze(screen, maze):
+    for y, row in enumerate(maze.maze):
+        for x, cell in enumerate(row):
+            rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+            if cell == '#':
+                pygame.draw.rect(screen, WALL_COLOR, rect)
+            elif cell == 'S':
+                pygame.draw.rect(screen, START_COLOR, rect)
+            elif cell == 'E':
+                pygame.draw.rect(screen, EXIT_COLOR, rect)
+            else:
+                pygame.draw.rect(screen, PATH_COLOR, rect)
+    # Draw player
+    py, px = maze.player
+    prect = pygame.Rect(px * CELL_SIZE, py * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+    pygame.draw.rect(screen, PLAYER_COLOR, prect)
+
+def main():
+    print('--- Maze Game (Pygame) ---')
+    h, w = get_maze_size()
+    maze = Maze(h, w)
+    pygame.init()
+    screen_width = (2 * w + 1) * CELL_SIZE
+    screen_height = (2 * h + 1) * CELL_SIZE
+    screen = pygame.display.set_mode((screen_width, screen_height))
+    pygame.display.set_caption('Maze Game')
+    clock = pygame.time.Clock()
+    finished = False
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if not finished and event.type == pygame.KEYDOWN:
+                if event.key in KEY_TO_DIR:
+                    maze.move_player(KEY_TO_DIR[event.key])
+        screen.fill(BG_COLOR)
+        draw_maze(screen, maze)
+        pygame.display.flip()
+        if not finished and maze.is_finished():
+            finished = True
+            print('Congratulations! You reached the exit!')
+        clock.tick(60)
+
+if __name__ == '__main__':
+    main()
