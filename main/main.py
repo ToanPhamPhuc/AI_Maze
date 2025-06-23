@@ -14,6 +14,7 @@ KEY_TO_DIR = {
 CELL_SIZE = 24  # Default, will be recalculated
 MIN_SCREEN_W, MIN_SCREEN_H = 1366, 768
 MAX_SCREEN_W, MAX_SCREEN_H = 1536, 864
+
 WALL_COLOR = (40, 40, 40)
 PATH_COLOR = (220, 220, 220)
 PLAYER_COLOR = (0, 120, 255)
@@ -23,14 +24,17 @@ BG_COLOR = (30, 30, 30)
 PLAYER_TRAIL_COLOR = (0, 120, 255, 80)  # RGBA for semi-transparent trail
 
 class Maze:
-    def __init__(self, height, width):
+    def __init__(self, height, width, cell_size):
         self.height = height
         self.width = width
+        self.cell_size = cell_size
         self.maze = [['#'] * (2 * width + 1) for _ in range(2 * height + 1)]
         self._generate_maze()
         self.start = (1, 1)
         self.end = (2 * height - 1, 2 * width - 1)
         self.player = list(self.start)
+        self.pixel_w = len(self.maze[0]) * self.cell_size
+        self.pixel_h = len(self.maze) * self.cell_size
 
     def _generate_maze(self):
         visited = [[False] * self.width for _ in range(self.height)]
@@ -40,16 +44,14 @@ class Maze:
             visited[y][x] = True
             dirs = [(0, 1), (1, 0), (0, -1), (-1, 0)]
             random.shuffle(dirs)
-            found = False
             for dy, dx in dirs:
                 ny, nx = y + dy, x + dx
                 if 0 <= ny < self.height and 0 <= nx < self.width and not visited[ny][nx]:
                     self.maze[y * 2 + 1 + dy][x * 2 + 1 + dx] = ' '
                     self.maze[ny * 2 + 1][nx * 2 + 1] = ' '
                     stack.append((ny, nx))
-                    found = True
                     break
-            if not found:
+            else:
                 stack.pop()
         self.maze[1][1] = 'S'
         self.maze[2 * self.height - 1][2 * self.width - 1] = 'E'
@@ -78,13 +80,11 @@ def get_maze_size():
             print('Invalid input. Please enter integers.')
 
 def draw_maze(screen, maze, trail=None):
-    maze_pixel_w = len(maze.maze[0]) * CELL_SIZE
-    maze_pixel_h = len(maze.maze) * CELL_SIZE
-    offset_x = (screen.get_width() - maze_pixel_w) // 2 if screen.get_width() > maze_pixel_w else 0
-    offset_y = (screen.get_height() - maze_pixel_h) // 2 if screen.get_height() > maze_pixel_h else 0
+    offset_x = (screen.get_width() - maze.pixel_w) // 2 if screen.get_width() > maze.pixel_w else 0
+    offset_y = (screen.get_height() - maze.pixel_h) // 2 if screen.get_height() > maze.pixel_h else 0
     for y, row in enumerate(maze.maze):
         for x, cell in enumerate(row):
-            rect = pygame.Rect(offset_x + x * CELL_SIZE, offset_y + y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+            rect = pygame.Rect(offset_x + x * maze.cell_size, offset_y + y * maze.cell_size, maze.cell_size, maze.cell_size)
             if cell == '#':
                 pygame.draw.rect(screen, WALL_COLOR, rect)
             elif cell == 'S':
@@ -95,19 +95,27 @@ def draw_maze(screen, maze, trail=None):
                 pygame.draw.rect(screen, PATH_COLOR, rect)
     # Draw trail if enabled
     if trail:
-        trail_surf = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+        trail_surf = pygame.Surface((maze.cell_size, maze.cell_size), pygame.SRCALPHA)
         trail_surf.fill(PLAYER_TRAIL_COLOR)
         for (ty, tx) in trail:
-            screen.blit(trail_surf, (offset_x + tx * CELL_SIZE, offset_y + ty * CELL_SIZE))
+            screen.blit(trail_surf, (offset_x + tx * maze.cell_size, offset_y + ty * maze.cell_size))
     # Draw player
     py, px = maze.player
-    prect = pygame.Rect(offset_x + px * CELL_SIZE, offset_y + py * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+    prect = pygame.Rect(offset_x + px * maze.cell_size, offset_y + py * maze.cell_size, maze.cell_size, maze.cell_size)
     pygame.draw.rect(screen, PLAYER_COLOR, prect)
+
+def reset_maze(h, w, cell_size):
+    maze = Maze(h, w, cell_size)
+    finished = False
+    steps = 0
+    start_time = pygame.time.get_ticks()
+    solve_time = None
+    trail = set()
+    return maze, finished, steps, start_time, solve_time, trail
 
 def main():
     print('--- Maze Game (Pygame) ---')
     h, w = get_maze_size()
-    maze = Maze(h, w)
     pygame.init()
     # Calculate cell size and screen size
     maze_pixel_w = (2 * w + 1)
@@ -118,61 +126,38 @@ def main():
     # Ensure minimum screen size
     screen_width = max(MIN_SCREEN_W, min(MAX_SCREEN_W, maze_pixel_w * cell_size))
     screen_height = max(MIN_SCREEN_H, min(MAX_SCREEN_H, maze_pixel_h * cell_size))
-    global CELL_SIZE
-    CELL_SIZE = cell_size
     screen = pygame.display.set_mode((screen_width, screen_height))
     pygame.display.set_caption('Maze Game')
     clock = pygame.time.Clock()
-    finished = False
     move_dir = None
     move_delay = 120  # milliseconds between moves when holding
     last_move_time = 0
-    steps = 0
-    start_time = pygame.time.get_ticks()
-    solve_time = None
-    trail = set()
     show_trail = False
+    maze, finished, steps, start_time, solve_time, trail = reset_maze(h, w, cell_size)
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if not finished:
-                if event.type == pygame.KEYDOWN:
-                    if event.key in KEY_TO_DIR:
-                        move_dir = KEY_TO_DIR[event.key]
-                        last_move_time = 0  # move immediately
-                    if event.key == pygame.K_r:
-                        maze = Maze(h, w)
-                        finished = False
-                        steps = 0
-                        start_time = pygame.time.get_ticks()
-                        solve_time = None
-                        trail = set()
-                    if event.key == pygame.K_t:
-                        show_trail = not show_trail
-                if event.type == pygame.KEYUP:
-                    if event.key in KEY_TO_DIR and move_dir == KEY_TO_DIR[event.key]:
-                        move_dir = None
-            else:
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-                    maze = Maze(h, w)
-                    finished = False
-                    steps = 0
-                    start_time = pygame.time.get_ticks()
-                    solve_time = None
-                    trail = set()
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_t:
+            if event.type == pygame.KEYDOWN:
+                if event.key in KEY_TO_DIR:
+                    move_dir = KEY_TO_DIR[event.key]
+                    last_move_time = 0  # move immediately
+                elif event.key == pygame.K_r:
+                    maze, finished, steps, start_time, solve_time, trail = reset_maze(h, w, cell_size)
+                elif event.key == pygame.K_t:
                     show_trail = not show_trail
+            if event.type == pygame.KEYUP:
+                if event.key in KEY_TO_DIR and move_dir == KEY_TO_DIR[event.key]:
+                    move_dir = None
         now = pygame.time.get_ticks()
         if not finished and move_dir:
             if last_move_time == 0 or now - last_move_time >= move_delay:
-                if maze.move_player(move_dir):
-                    last_move_time = now
+                moved = maze.move_player(move_dir)
+                last_move_time = now
+                if moved:
                     steps += 1
                     trail.add(tuple(maze.player))
-                else:
-                    last_move_time = now  # still update to prevent rapid wall bumping
         screen.fill(BG_COLOR)
         draw_maze(screen, maze, trail if show_trail else None)
         # Draw stats
