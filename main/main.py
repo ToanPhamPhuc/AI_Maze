@@ -183,6 +183,12 @@ def main():
         time_surf = font.render(f"Time: {elapsed_sec}s", True, (255,255,255))
         screen.blit(steps_surf, (10, 10))
         screen.blit(time_surf, (10, 40))
+        # Show trail toggle hint with opacity based on state
+        hint_alpha = 80 if not show_trail else 200
+        trail_hint_surf = font.render("Press T to show trail", True, (180,180,180))
+        trail_hint_surf = trail_hint_surf.convert_alpha()
+        trail_hint_surf.set_alpha(hint_alpha)
+        screen.blit(trail_hint_surf, (10, 70))
         if finished:
             # Draw semi-transparent overlay
             overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
