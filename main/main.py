@@ -11,7 +11,9 @@ KEY_TO_DIR = {
     pygame.K_RIGHT: 'RIGHT',
 }
 
-CELL_SIZE = 24
+CELL_SIZE = 24  # Default, will be recalculated
+MIN_SCREEN_W, MIN_SCREEN_H = 400, 400
+MAX_SCREEN_W, MAX_SCREEN_H = 1920, 1080
 WALL_COLOR = (40, 40, 40)
 PATH_COLOR = (220, 220, 220)
 PLAYER_COLOR = (0, 120, 255)
@@ -96,8 +98,17 @@ def main():
     h, w = get_maze_size()
     maze = Maze(h, w)
     pygame.init()
-    screen_width = (2 * w + 1) * CELL_SIZE
-    screen_height = (2 * h + 1) * CELL_SIZE
+    # Calculate cell size and screen size
+    maze_pixel_w = (2 * w + 1)
+    maze_pixel_h = (2 * h + 1)
+    cell_w = MAX_SCREEN_W // maze_pixel_w
+    cell_h = MAX_SCREEN_H // maze_pixel_h
+    cell_size = min(cell_w, cell_h, 48)  # Cap cell size for very small mazes
+    # Ensure minimum screen size
+    screen_width = max(MIN_SCREEN_W, min(MAX_SCREEN_W, maze_pixel_w * cell_size))
+    screen_height = max(MIN_SCREEN_H, min(MAX_SCREEN_H, maze_pixel_h * cell_size))
+    global CELL_SIZE
+    CELL_SIZE = cell_size
     screen = pygame.display.set_mode((screen_width, screen_height))
     pygame.display.set_caption('Maze Game')
     clock = pygame.time.Clock()
