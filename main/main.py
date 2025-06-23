@@ -105,6 +105,9 @@ def main():
     move_dir = None
     move_delay = 120  # milliseconds between moves when holding
     last_move_time = 0
+    steps = 0
+    start_time = pygame.time.get_ticks()
+    solve_time = None
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -115,22 +118,56 @@ def main():
                     if event.key in KEY_TO_DIR:
                         move_dir = KEY_TO_DIR[event.key]
                         last_move_time = 0  # move immediately
+                    if event.key == pygame.K_r:
+                        maze = Maze(h, w)
+                        finished = False
+                        steps = 0
+                        start_time = pygame.time.get_ticks()
+                        solve_time = None
                 if event.type == pygame.KEYUP:
                     if event.key in KEY_TO_DIR and move_dir == KEY_TO_DIR[event.key]:
                         move_dir = None
+            else:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                    maze = Maze(h, w)
+                    finished = False
+                    steps = 0
+                    start_time = pygame.time.get_ticks()
+                    solve_time = None
         now = pygame.time.get_ticks()
         if not finished and move_dir:
             if last_move_time == 0 or now - last_move_time >= move_delay:
                 if maze.move_player(move_dir):
                     last_move_time = now
+                    steps += 1
                 else:
                     last_move_time = now  # still update to prevent rapid wall bumping
         screen.fill(BG_COLOR)
         draw_maze(screen, maze)
+        # Draw stats
+        font = pygame.font.SysFont(None, 28)
+        elapsed = (solve_time if solve_time is not None else now) - start_time
+        elapsed_sec = elapsed // 1000
+        steps_surf = font.render(f"Steps: {steps}", True, (255,255,255))
+        time_surf = font.render(f"Time: {elapsed_sec}s", True, (255,255,255))
+        screen.blit(steps_surf, (10, 10))
+        screen.blit(time_surf, (10, 40))
+        if finished:
+            # Draw semi-transparent overlay
+            overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 160))  # 160/255 alpha for dimming
+            screen.blit(overlay, (0, 0))
+            big_font = pygame.font.SysFont(None, 48)
+            msg1 = big_font.render("Congratulations!", True, (255,255,0))
+            msg2 = font.render(f"Solved in {steps} steps, {elapsed_sec} seconds", True, (255,255,255))
+            msg3 = font.render("Press R for a new maze", True, (255,255,255))
+            screen.blit(msg1, (screen.get_width()//2 - msg1.get_width()//2, screen.get_height()//2 - 60))
+            screen.blit(msg2, (screen.get_width()//2 - msg2.get_width()//2, screen.get_height()//2))
+            screen.blit(msg3, (screen.get_width()//2 - msg3.get_width()//2, screen.get_height()//2 + 40))
         pygame.display.flip()
         if not finished and maze.is_finished():
             finished = True
-            print('Congratulations! You reached the exit!')
+            solve_time = pygame.time.get_ticks() - start_time
         clock.tick(60)
 
 if __name__ == '__main__':
