@@ -1,7 +1,14 @@
-import pygame
 import sys
-import random
 import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import random
+import pygame
+from configs.config import *
+from maze.maze import Maze
+from utils.highscore import get_highscore_filename, load_highscore, save_highscore
+from ui.menu import draw_menu
+from ui.custom_input import draw_custom_input
+from ui.game_screen import draw_maze
 
 # Directions: (dy, dx)
 DIRS = {'UP': (-1, 0), 'DOWN': (1, 0), 'LEFT': (0, -1), 'RIGHT': (0, 1)}
@@ -12,61 +19,7 @@ KEY_TO_DIR = {
     pygame.K_RIGHT: 'RIGHT',
 }
 
-CELL_SIZE = 24  # Default, will be recalculated
-MIN_SCREEN_W, MIN_SCREEN_H = 1366, 768
-MAX_SCREEN_W, MAX_SCREEN_H = 1536, 864
-
-WALL_COLOR = (40, 40, 40)
-PATH_COLOR = (220, 220, 220)
-PLAYER_COLOR = (0, 120, 255)
-EXIT_COLOR = (0, 200, 0)
-START_COLOR = (255, 200, 0)
-BG_COLOR = (30, 30, 30)
-PLAYER_TRAIL_COLOR = (0, 120, 255, 80)  # RGBA for semi-transparent trail
-
-class Maze:
-    def __init__(self, height, width, cell_size):
-        self.height = height
-        self.width = width
-        self.cell_size = cell_size
-        self.maze = [['#'] * (2 * width + 1) for _ in range(2 * height + 1)]
-        self._generate_maze()
-        self.start = (1, 1)
-        self.end = (2 * height - 1, 2 * width - 1)
-        self.player = list(self.start)
-        self.pixel_w = len(self.maze[0]) * self.cell_size
-        self.pixel_h = len(self.maze) * self.cell_size
-
-    def _generate_maze(self):
-        visited = [[False] * self.width for _ in range(self.height)]
-        stack = [(0, 0)]
-        while stack:
-            y, x = stack[-1]
-            visited[y][x] = True
-            dirs = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-            random.shuffle(dirs)
-            for dy, dx in dirs:
-                ny, nx = y + dy, x + dx
-                if 0 <= ny < self.height and 0 <= nx < self.width and not visited[ny][nx]:
-                    self.maze[y * 2 + 1 + dy][x * 2 + 1 + dx] = ' '
-                    self.maze[ny * 2 + 1][nx * 2 + 1] = ' '
-                    stack.append((ny, nx))
-                    break
-            else:
-                stack.pop()
-        self.maze[1][1] = 'S'
-        self.maze[2 * self.height - 1][2 * self.width - 1] = 'E'
-
-    def move_player(self, direction):
-        dy, dx = DIRS[direction]
-        ny, nx = self.player[0] + dy, self.player[1] + dx
-        if 0 <= ny < len(self.maze) and 0 <= nx < len(self.maze[0]) and self.maze[ny][nx] != '#':
-            self.player = [ny, nx]
-            return True
-        return False
-
-    def is_finished(self):
-        return tuple(self.player) == self.end
+CELL_SIZE = DEFAULT_CELL_SIZE  # Default, will be recalculated
 
 def get_maze_size():
     while True:
@@ -80,31 +33,6 @@ def get_maze_size():
         except ValueError:
             print('Invalid input. Please enter integers.')
 
-def draw_maze(screen, maze, trail=None):
-    offset_x = (screen.get_width() - maze.pixel_w) // 2 if screen.get_width() > maze.pixel_w else 0
-    offset_y = (screen.get_height() - maze.pixel_h) // 2 if screen.get_height() > maze.pixel_h else 0
-    for y, row in enumerate(maze.maze):
-        for x, cell in enumerate(row):
-            rect = pygame.Rect(offset_x + x * maze.cell_size, offset_y + y * maze.cell_size, maze.cell_size, maze.cell_size)
-            if cell == '#':
-                pygame.draw.rect(screen, WALL_COLOR, rect)
-            elif cell == 'S':
-                pygame.draw.rect(screen, START_COLOR, rect)
-            elif cell == 'E':
-                pygame.draw.rect(screen, EXIT_COLOR, rect)
-            else:
-                pygame.draw.rect(screen, PATH_COLOR, rect)
-    # Draw trail if enabled
-    if trail:
-        trail_surf = pygame.Surface((maze.cell_size, maze.cell_size), pygame.SRCALPHA)
-        trail_surf.fill(PLAYER_TRAIL_COLOR)
-        for (ty, tx) in trail:
-            screen.blit(trail_surf, (offset_x + tx * maze.cell_size, offset_y + ty * maze.cell_size))
-    # Draw player
-    py, px = maze.player
-    prect = pygame.Rect(offset_x + px * maze.cell_size, offset_y + py * maze.cell_size, maze.cell_size, maze.cell_size)
-    pygame.draw.rect(screen, PLAYER_COLOR, prect)
-
 def reset_maze(h, w, cell_size):
     maze = Maze(h, w, cell_size)
     finished = False
@@ -113,92 +41,6 @@ def reset_maze(h, w, cell_size):
     solve_time = None
     trail = set()
     return maze, finished, steps, start_time, solve_time, trail
-
-# High score file helpers
-def get_highscore_filename(diff, w=None, h=None):
-    base = 'scores'
-    if not os.path.exists(base):
-        os.makedirs(base)
-    if diff == 'Beginner':
-        return os.path.join(base, 'BeginnerHighScore.txt')
-    elif diff == 'Intermediate':
-        return os.path.join(base, 'IntermediateHighScore.txt')
-    elif diff == 'Expert':
-        return os.path.join(base, 'ExpertHighScore.txt')
-    elif diff == 'Custom' and w and h:
-        return os.path.join(base, f'Custom{w}x{h}HighScore.txt')
-    return None
-
-def load_highscore(diff, w=None, h=None):
-    fname = get_highscore_filename(diff, w, h)
-    if fname and os.path.exists(fname):
-        try:
-            with open(fname, 'r') as f:
-                line = f.read().strip()
-                if ',' in line:
-                    t, s = line.split(',')
-                    return int(t), int(s)
-                else:
-                    # Backward compatibility: only time stored
-                    return int(line), None
-        except:
-            return None, None
-    return None, None
-
-def save_highscore(diff, time_score, steps_score, w=None, h=None):
-    fname = get_highscore_filename(diff, w, h)
-    if fname:
-        with open(fname, 'w') as f:
-            f.write(f'{time_score},{steps_score}')
-
-def draw_menu(screen, selected_idx, hover_idx=None, highscores=None):
-    screen.fill(BG_COLOR)
-    font = pygame.font.SysFont(None, 48)
-    small_font = pygame.font.SysFont(None, 32)
-    title = font.render("Select Difficulty", True, (255,255,0))
-    options = [
-        "Beginner (8x8)",
-        "Intermediate (16x16)",
-        "Expert (30x16)",
-        "Custom",
-        "Quit"
-    ]
-    screen.blit(title, (screen.get_width()//2 - title.get_width()//2, 100))
-    option_rects = []
-    for i, opt in enumerate(options):
-        color = (255,255,255) if i == selected_idx or (hover_idx is not None and i == hover_idx) else (180,180,180)
-        surf = small_font.render(opt, True, color)
-        rect = surf.get_rect(center=(screen.get_width()//2, 220 + i*60))
-        screen.blit(surf, rect)
-        option_rects.append(rect)
-        # Draw high score for this diff
-        if highscores and i < 4:
-            hs = highscores.get(opt.split()[0], None)
-            if hs and hs[0] is not None:
-                hs_surf = small_font.render(f"Best: {hs[0]}s, {hs[1]} steps", True, (0,255,0))
-                screen.blit(hs_surf, (screen.get_width()//2 + 180, 220 + i*60 - 16))
-    pygame.display.flip()
-    return option_rects
-
-def draw_custom_input(screen, width_str, height_str, active_field):
-    screen.fill(BG_COLOR)
-    font = pygame.font.SysFont(None, 48)
-    small_font = pygame.font.SysFont(None, 32)
-    title = font.render("Custom Maze Size", True, (255,255,0))
-    screen.blit(title, (screen.get_width()//2 - title.get_width()//2, 100))
-    w_label = small_font.render("Width:", True, (255,255,255))
-    h_label = small_font.render("Height:", True, (255,255,255))
-    w_color = (0,255,0) if active_field == 'width' else (255,255,255)
-    h_color = (0,255,0) if active_field == 'height' else (255,255,255)
-    w_input = small_font.render(width_str or "_", True, w_color)
-    h_input = small_font.render(height_str or "_", True, h_color)
-    screen.blit(w_label, (screen.get_width()//2 - 120, 200))
-    screen.blit(w_input, (screen.get_width()//2, 200))
-    screen.blit(h_label, (screen.get_width()//2 - 120, 260))
-    screen.blit(h_input, (screen.get_width()//2, 260))
-    instr = small_font.render("Enter numbers, press Enter to confirm", True, (180,180,180))
-    screen.blit(instr, (screen.get_width()//2 - instr.get_width()//2, 340))
-    pygame.display.flip()
 
 def main():
     print('--- Maze Game (Pygame) ---')
@@ -213,11 +55,11 @@ def main():
     height_str = ''
     active_field = 'width'
     h, w = 8, 8  # default
-    cell_size = 24
+    cell_size = DEFAULT_CELL_SIZE
     maze = None
     finished = False
     move_dir = None
-    move_delay = 120
+    move_delay = MOVE_DELAY
     last_move_time = 0
     show_trail = True
     steps = 0
@@ -346,7 +188,7 @@ def main():
             maze_pixel_h = (2 * h + 1)
             cell_w = MAX_SCREEN_W // maze_pixel_w
             cell_h = MAX_SCREEN_H // maze_pixel_h
-            cell_size = min(cell_w, cell_h, 48)
+            cell_size = min(cell_w, cell_h, DEFAULT_CELL_SIZE)
             screen_width = max(MIN_SCREEN_W, min(MAX_SCREEN_W, maze_pixel_w * cell_size))
             screen_height = max(MIN_SCREEN_H, min(MAX_SCREEN_H, maze_pixel_h * cell_size))
             screen = pygame.display.set_mode((screen_width, screen_height))
