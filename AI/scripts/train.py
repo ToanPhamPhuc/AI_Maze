@@ -165,7 +165,7 @@ def ai_play():
                     hs_surf = font.render(f"Best: {format_time(hs_time)}, {hs_steps} steps", True, (0,255,0))
                     screen.blit(hs_surf, (10, y))
                     y += hs_surf.get_height() + 5
-                reward_surf = font.render(f"Total Reward: {total_reward}", True, (255, 200, 0))
+                reward_surf = font.render(f"Total Reward: {total_reward:.1f}", True, (255, 200, 0))
                 screen.blit(reward_surf, (10, y))
                 y += reward_surf.get_height() + 5
                 # Show controls
@@ -185,13 +185,13 @@ def ai_play():
                 reward_font = pygame.font.SysFont(None, 28)
                 if last_reward > 0:
                     reward_color = (0, 200, 0)
-                    reward_str = f"+{last_reward}"
+                    reward_str = f"+{last_reward:.1f}"
                 elif last_reward < 0:
                     reward_color = (200, 0, 0)
-                    reward_str = f"{last_reward}"
+                    reward_str = f"{last_reward:.1f}"
                 else:
                     reward_color = (180, 180, 180)
-                    reward_str = f"0"
+                    reward_str = f"0.0"
                 # Centered above player
                 grid_h = len(env.maze.maze)
                 grid_w = len(env.maze.maze[0])
@@ -208,9 +208,12 @@ def ai_play():
                 pygame.display.flip()
                 pygame.time.delay(60)
                 # Dynamic time/step punishment
-                if steps > step_limit or elapsed > time_limit:
+                if steps > step_limit or elapsed > time_limit or info.get('stuck', False):
                     font = pygame.font.SysFont(None, 48)
-                    msg = font.render("Time up!", True, (200,0,0))
+                    if info.get('stuck', False):
+                        msg = font.render("Stuck! (Auto reset)", True, (200,0,0))
+                    else:
+                        msg = font.render("Time up!", True, (200,0,0))
                     screen.blit(msg, (screen.get_width()//2 - msg.get_width()//2, screen.get_height()//2 - 40))
                     pygame.display.flip()
                     pygame.time.delay(2000)

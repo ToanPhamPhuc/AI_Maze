@@ -34,6 +34,7 @@ class MazeEnvironment:
         self.trail[tuple(self.maze.player)] += 1
         self.last_pos = tuple(self.maze.player)
         self.min_dist_to_goal = self._manhattan_to_goal(self.maze.player)  # Track best distance this episode
+        self.steps_since_progress = 0  # For stuck detection
         return self._get_state()
 
     def _get_state(self):
@@ -75,9 +76,15 @@ class MazeEnvironment:
         new_dist = self._manhattan_to_goal(self.maze.player)
         # New minimum distance bonus
         new_min_dist_bonus = 0
+        stuck = False
         if new_dist < getattr(self, 'min_dist_to_goal', float('inf')):
             new_min_dist_bonus = 2.0
             self.min_dist_to_goal = new_dist
+            self.steps_since_progress = 0  # Reset on progress
+        else:
+            self.steps_since_progress += 1
+            if self.steps_since_progress > 100:
+                stuck = True
         reward = self._calculate_reward(old_pos, moved, old_dist, new_dist) + new_min_dist_bonus
         done = self.maze.is_finished()
         self.last_pos = tuple(self.maze.player)
@@ -85,7 +92,8 @@ class MazeEnvironment:
         info = {
             'moved': moved,
             'position': self.maze.player.copy(),
-            'steps': self.steps
+            'steps': self.steps,
+            'stuck': stuck
         }
         return next_state, reward, done, info
 
