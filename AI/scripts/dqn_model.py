@@ -1,8 +1,11 @@
+#region: Imports
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+#endregion
 
+#region: DQN Network
 class DQN(nn.Module):
     """
     Deep Q-Network for maze navigation using both global and local wall state.
@@ -25,7 +28,9 @@ class DQN(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         return self.fc3(x)
+#endregion
 
+#region: DQN Agent
 class DQNAgent:
     def __init__(self, global_state_size, local_state_size, action_size, device='cpu'):
         self.global_state_size = global_state_size
@@ -103,4 +108,5 @@ class DQNAgent:
         self.target_network.load_state_dict(checkpoint['target_network_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.epsilon = checkpoint['epsilon']
-        self.step_count = checkpoint['step_count'] 
+        self.step_count = checkpoint['step_count']
+#endregion 

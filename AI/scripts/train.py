@@ -1,7 +1,7 @@
+#region: Imports
 import sys
 import os
 import glob
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import time
 import numpy as np
 import pygame
@@ -9,10 +9,13 @@ from environment import MazeEnvironment
 from scripts.dqn_model import DQNAgent
 import torch
 from GAME.configs.config import *
+#endregion
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 SCORES_DIR = os.path.join(os.path.dirname(__file__), 'AI Scores')
 os.makedirs(SCORES_DIR, exist_ok=True)
 
+#region: Scores
 def get_highscore_path(w, h):
     # Cleaned up to avoid hidden characters or encoding issues
     return os.path.join(SCORES_DIR, f'HighScore{w}x{h}')
@@ -32,6 +35,7 @@ def save_highscore(w, h, time_sec, steps):
     path = get_highscore_path(w, h)
     with open(path, 'w') as f:
         f.write(f'{time_sec},{steps}')
+#endregion
 
 def format_time(seconds):
     m = seconds // 60
@@ -43,7 +47,9 @@ def pad_state(state, target_size):
         return np.concatenate([state, np.zeros(target_size - len(state), dtype=state.dtype)])
     return state
 
+#region: main AI training
 def ai_play():
+    #region: Game init
     pygame.init()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     min_size, max_size = 3, 16  # Use config or curriculum
@@ -56,6 +62,7 @@ def ai_play():
     local_state_size = env.local_state_size
     agent = DQNAgent(global_state_size, local_state_size, 4, device)
     model_path = os.path.join(model_dir, f'maze_dqn_{max_size}x{max_size}.pth')
+    #endregion
     if os.path.exists(model_path):
         agent.load(model_path)
         print(f"Loaded model for {max_size}x{max_size}")
@@ -108,7 +115,7 @@ def ai_play():
                             timed_out = True
                             done = True
                             break
-                        if event.key == pygame.K_p:
+                        if event.key == pygame.K_p: # key to reset everything: agent, scores, ...
                             for f in glob.glob(os.path.join(SCORES_DIR, 'HighScore*')):
                                 try:
                                     os.remove(f)
@@ -119,7 +126,7 @@ def ai_play():
                             screen.blit(msg, (screen.get_width()//2 - msg.get_width()//2, screen.get_height()//2 - 40))
                             pygame.display.flip()
                             pygame.time.delay(1500)
-                            agent = DQNAgent(global_state_size, local_state_size, 4, device)
+                            agent = DQNAgent(global_state_size, local_state_size, 4, device) #reset agent yo
                             timed_out = True
                             done = True
                             break
@@ -254,3 +261,4 @@ def ai_play():
 
 if __name__ == "__main__":
     ai_play() 
+#endregion

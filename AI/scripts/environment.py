@@ -1,3 +1,4 @@
+#region: Imports
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -6,13 +7,16 @@ import pygame
 from GAME.maze.maze import Maze
 from GAME.configs.config import *
 from collections import defaultdict
+#endregion
 
+#region: MazeEnvironment
 class MazeEnvironment:
     """
     RL environment for the maze game, matching main game rendering and config logic.
     Returns both global state (full maze + player pos) and local wall state (up, down, left, right).
     Tracks and renders player trail as a heatmap.
     """
+    #region: __init__
     def __init__(self, height=8, width=8, cell_size=None):
         self.height = height
         self.width = width
@@ -26,7 +30,9 @@ class MazeEnvironment:
         self.local_state_size = 4  # up, down, left, right
         self.action_space = 4
         self.action_names = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+    #endregion
 
+    #region: reset
     def reset(self):
         self.maze = Maze(self.height, self.width, self.cell_size)
         self.steps = 0
@@ -36,7 +42,9 @@ class MazeEnvironment:
         self.min_dist_to_goal = self._manhattan_to_goal(self.maze.player)  # Track best distance this episode
         self.steps_since_progress = 0  # For stuck detection
         return self._get_state()
+    #endregion
 
+    #region: _get_state
     def _get_state(self):
         # Global state: maze grid (1 for wall, 0 for path), player pos normalized
         state = []
@@ -51,7 +59,9 @@ class MazeEnvironment:
         # Local wall state: up, down, left, right (1 if wall, 0 if open)
         local = self.get_local_wall_state()
         return (np.array(state, dtype=np.float32), np.array(local, dtype=np.float32))
+    #endregion
 
+    #region: get_local_wall_state
     def get_local_wall_state(self):
         y, x = self.maze.player
         maze = self.maze.maze
@@ -64,7 +74,9 @@ class MazeEnvironment:
             else:
                 state.append(1)  # Out-of-bounds is wall
         return state
+    #endregion
 
+    #region: step
     def step(self, action):
         action_name = self.action_names[action]
         old_pos = self.maze.player.copy()
@@ -96,11 +108,15 @@ class MazeEnvironment:
             'stuck': stuck
         }
         return next_state, reward, done, info
+    #endregion
 
+    #region: _manhattan_to_goal
     def _manhattan_to_goal(self, pos):
         # Goal is at self.maze.end
         return abs(pos[0] - self.maze.end[0]) + abs(pos[1] - self.maze.end[1])
+    #endregion
 
+    #region: _calculate_reward
     def _calculate_reward(self, old_pos, moved, old_dist, new_dist):
         if self.maze.is_finished():
             return 100
@@ -119,7 +135,9 @@ class MazeEnvironment:
         # Exploration bonus for first visit
         exploration_bonus = 0.2 if self.trail[tuple(self.maze.player)] == 1 else 0
         return dist_reward + revisit_penalty + step_penalty + exploration_bonus
+    #endregion
 
+    #region: render
     def render(self, screen=None):
         grid_h = len(self.maze.maze)
         grid_w = len(self.maze.maze[0])
@@ -163,4 +181,6 @@ class MazeEnvironment:
         prect = pygame.Rect(offset_x + px * self.cell_size, offset_y + py * self.cell_size, self.cell_size, self.cell_size)
         pygame.draw.rect(screen, PLAYER_COLOR, prect)
         pygame.display.flip()
-        return screen 
+        return screen
+    #endregion
+#endregion 

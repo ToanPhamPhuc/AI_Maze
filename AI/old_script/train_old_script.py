@@ -1,3 +1,4 @@
+#region: Imports
 import sys
 import os
 import glob
@@ -8,11 +9,9 @@ import pygame
 from environment_old_script import MazeEnvironment
 from dqn_model_old_script import DQNAgent
 import torch
+#endregion
 
-# Directory for high scores
-SCORES_DIR = os.path.join(os.path.dirname(__file__), 'AI Scores')
-os.makedirs(SCORES_DIR, exist_ok=True)
-
+#region: Scores
 def get_highscore_path(w, h):
     return os.path.join(SCORES_DIR, f'HighScore{w}x{h}')
 
@@ -31,6 +30,7 @@ def save_highscore(w, h, time_sec, steps):
     path = get_highscore_path(w, h)
     with open(path, 'w') as f:
         f.write(f'{time_sec},{steps}')
+#endregion
 
 def format_time(seconds):
     m = seconds // 60
@@ -43,6 +43,7 @@ def pad_state(state, target_size):
         return np.concatenate([state, np.zeros(target_size - len(state), dtype=state.dtype)])
     return state
 
+#region: main AI training
 def ai_play():
     pygame.init()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -177,6 +178,7 @@ def ai_play():
                 print(f"Level {size}x{size} Run {run+1}/{runs_per_level}: Time up! (Steps={steps}, Time={format_time(elapsed)})")
     print("All levels complete!")
     pygame.quit()
+#endregion
 
 if __name__ == "__main__":
     ai_play() 
