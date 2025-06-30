@@ -306,7 +306,10 @@ def main():
             screen.fill(BG_COLOR)
             draw_maze(screen, maze, trail if show_trail else None)
             font = pygame.font.SysFont(None, 28)
-            elapsed = (solve_time if solve_time is not None else now) - start_time
+            if solve_time is not None:
+                elapsed = solve_time - start_time
+            else:
+                elapsed = now - start_time
             elapsed_sec = elapsed // 1000
             # Draw screen t and stats stacked vertically
             y = 0
@@ -349,7 +352,7 @@ def main():
             pygame.display.flip()
             if not finished and maze.is_finished():
                 finished = True
-                solve_time = pygame.time.get_ticks() - start_time
+                solve_time = pygame.time.get_ticks()
                 # Update high score if beaten
                 if current_diff == 'Custom':
                     prev_time, prev_steps = load_highscore('Custom', w, h)
