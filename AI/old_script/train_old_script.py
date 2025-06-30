@@ -5,8 +5,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import time
 import numpy as np
 import pygame
-from environment import MazeEnvironment
-from dqn_model import DQNAgent
+from environment_old_script import MazeEnvironment
+from dqn_model_old_script import DQNAgent
 import torch
 
 # Directory for high scores
