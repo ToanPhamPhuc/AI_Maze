@@ -18,6 +18,10 @@ KEY_TO_DIR = {
     pygame.K_DOWN: 'DOWN',
     pygame.K_LEFT: 'LEFT',
     pygame.K_RIGHT: 'RIGHT',
+    pygame.K_w: 'UP',
+    pygame.K_s: 'DOWN',
+    pygame.K_a: 'LEFT',
+    pygame.K_d: 'RIGHT'
 }
 
 CELL_SIZE = DEFAULT_CELL_SIZE  # Default, will be recalculated
@@ -85,6 +89,7 @@ def main():
     start_time = 0
     solve_time = None
     trail = defaultdict(int)
+    new_high_score = False
     hover_idx = None
     current_diff = 'Beginner'
     current_highscore = None
@@ -111,9 +116,9 @@ def main():
                     pygame.quit()
                     sys.exit()
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_UP:
+                    if event.key == pygame.K_UP or event.key == pygame.K_w:
                         selected_idx = (selected_idx - 1) % 5
-                    elif event.key == pygame.K_DOWN:
+                    elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
                         selected_idx = (selected_idx + 1) % 5
                     elif event.key == pygame.K_RETURN:
                         idx = selected_idx
@@ -259,6 +264,7 @@ def main():
             move_dir = None
             last_move_time = 0
             show_trail = True
+            new_high_score = False
         elif menu_state == 'playing':
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -349,6 +355,9 @@ def main():
                 screen.blit(msg1, (screen.get_width()//2 - msg1.get_width()//2, screen.get_height()//2 - 60))
                 screen.blit(msg2, (screen.get_width()//2 - msg2.get_width()//2, screen.get_height()//2))
                 screen.blit(msg3, (screen.get_width()//2 - msg3.get_width()//2, screen.get_height()//2 + 40))
+                if new_high_score:
+                    hs_msg = big_font.render("NEW HIGH SCORE!", True, (255,255,0))
+                    screen.blit(hs_msg, (screen.get_width()//2 - hs_msg.get_width()//2, screen.get_height()//2 - 120))
             pygame.display.flip()
             if not finished and maze.is_finished():
                 finished = True
@@ -365,6 +374,7 @@ def main():
                         save_highscore('Custom', elapsed_sec, steps, w, h)
                         custom_hs = (elapsed_sec, steps)
                         current_highscore = (elapsed_sec, steps)
+                        new_high_score = True
                 else:
                     prev_time, prev_steps = load_highscore(current_diff)
                     update = False
@@ -376,6 +386,7 @@ def main():
                         save_highscore(current_diff, elapsed_sec, steps)
                         highscores[current_diff] = (elapsed_sec, steps)
                         current_highscore = (elapsed_sec, steps)
+                        new_high_score = True
             clock.tick(60)
 
 if __name__ == '__main__':
