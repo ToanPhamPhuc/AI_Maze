@@ -51,9 +51,9 @@ def format_time(seconds):
     parts = []
     if d > 0:
         parts.append(f"{d}d")
-    if h > 0 or d > 0:
+    if h > 0:
         parts.append(f"{h}h")
-    if m > 0 or h > 0 or d > 0:
+    if m > 0:
         parts.append(f"{m}m")
     parts.append(f"{s}s")
     return ''.join(parts)
