@@ -70,6 +70,8 @@ def ai_play():
             start_time = time.time()
             screen = None
             timed_out = False
+            freeze = False
+            show_trail = True
             while not done:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
@@ -80,7 +82,6 @@ def ai_play():
                             pygame.quit()
                             sys.exit()
                         if event.key == pygame.K_r:
-                            # Fast time-up: restart run
                             font = pygame.font.SysFont(None, 48)
                             msg = font.render("Time up! (Manual)", True, (200,0,0))
                             screen.blit(msg, (screen.get_width()//2 - msg.get_width()//2, screen.get_height()//2 - 40))
@@ -89,8 +90,7 @@ def ai_play():
                             timed_out = True
                             done = True
                             break
-                        if event.key == pygame.K_p: # and (pygame.key.get_mods() & pygame.KMOD_CTRL):
-                            # Hard reset: delete all high scores and reset agent
+                        if event.key == pygame.K_p:
                             for f in glob.glob(os.path.join(SCORES_DIR, 'HighScore*')):
                                 try:
                                     os.remove(f)
@@ -101,13 +101,23 @@ def ai_play():
                             screen.blit(msg, (screen.get_width()//2 - msg.get_width()//2, screen.get_height()//2 - 40))
                             pygame.display.flip()
                             pygame.time.delay(1500)
-                            # Reset agent for all maze sizes
                             agent = DQNAgent(max_state_size, 4, device)
                             timed_out = True
                             done = True
                             break
+                        if event.key == pygame.K_t:
+                            show_trail = not show_trail
+                        if event.key == pygame.K_RETURN:
+                            freeze = not freeze
                 if timed_out:
                     break
+                if freeze:
+                    font = pygame.font.SysFont(None, 48)
+                    msg = font.render("Frozen (Press Enter)", True, (0,200,255))
+                    screen.blit(msg, (10, screen.get_height()//2 - msg.get_height()//2))
+                    pygame.display.flip()
+                    pygame.time.delay(100)
+                    continue
                 # Pad state for the largest input size
                 padded_state = pad_state(state, max_state_size)
                 action = agent.act(padded_state, training=True)  # Enable exploration

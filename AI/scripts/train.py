@@ -81,6 +81,7 @@ def ai_play():
             total_reward = 0
             last_reward = 0
             show_trail = True
+            freeze = False
             # Dynamic time/step limits based on high score
             hs_time, hs_steps = load_highscore(size, size)
             if hs_time is not None and hs_steps is not None:
@@ -125,8 +126,17 @@ def ai_play():
                         if event.key == pygame.K_t:
                             show_trail = not show_trail
                             env.show_trail = show_trail
+                        if event.key == pygame.K_RETURN:
+                            freeze = not freeze
                 if timed_out:
                     break
+                if freeze:
+                    font = pygame.font.SysFont(None, 48)
+                    msg = font.render("Frozen (Press Enter)", True, (0,200,255))
+                    screen.blit(msg, (10, screen.get_height()//2 - msg.get_height()//2))
+                    pygame.display.flip()
+                    pygame.time.delay(100)
+                    continue
                 padded_state = pad_state(state, global_state_size)
                 action = agent.act(padded_state, local, training=True)
                 (next_state, next_local), reward, done, info = env.step(action)
@@ -174,7 +184,8 @@ def ai_play():
                     "Q: Quit",
                     "R: Time up (restart run)",
                     "P: Hard reset (clear scores, fresh agent)",
-                    "T: Toggle trail"
+                    "T: Toggle trail",
+                    "Enter: Freeze/Unfreeze"
                 ]
                 for i, text in enumerate(controls):
                     surf = controls_font.render(text, True, (255,255,0))
