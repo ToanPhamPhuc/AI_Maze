@@ -8,6 +8,7 @@ import pygame
 from environment import MazeEnvironment
 from dqn_model import DQNAgent
 import torch
+from GAME.configs.config import *
 
 # Directory for high scores
 SCORES_DIR = os.path.join(os.path.dirname(__file__), 'AI Scores')
@@ -70,6 +71,8 @@ def ai_play():
             start_time = time.time()
             screen = None
             timed_out = False
+            total_reward = 0  # Track total reward
+            last_reward = 0   # Track last reward
             while not done:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
@@ -116,20 +119,62 @@ def ai_play():
                 agent.remember(padded_state, action, reward, padded_next_state, done)
                 agent.replay()  # In-place training
                 state = next_state
-                steps += 1
+                steps = env.steps  # Use environment's step count
+                total_reward += reward
+                last_reward = reward
                 elapsed = int(time.time() - start_time)
                 # Render
                 screen = env.render(screen)
                 # Draw stats
                 font = pygame.font.SysFont(None, 32)
-                steps_surf = font.render(f"Steps: {steps}", True, (255,255,0))
-                time_surf = font.render(f"Time: {format_time(elapsed)}", True, (255,255,0))
+                steps_surf = font.render(f"Steps: {steps}", True, PLAYER_COLOR)
+                time_surf = font.render(f"Time: {format_time(elapsed)}", True, PLAYER_COLOR)
                 screen.blit(steps_surf, (10, 10))
                 screen.blit(time_surf, (10, 40))
                 hs_time, hs_steps = load_highscore(size, size)
                 if hs_time is not None:
                     hs_surf = font.render(f"Best: {format_time(hs_time)}, {hs_steps} steps", True, (0,128,0))
                     screen.blit(hs_surf, (10, 70))
+                # Show total reward
+                reward_surf = font.render(f"Total Reward: {total_reward}", True, (255, 200, 0))
+                screen.blit(reward_surf, (10, 100))
+                # Show last reward above AI's head
+                py, px = env.maze.player
+                grid_h = len(env.maze.maze)
+                grid_w = len(env.maze.maze[0])
+                cell_w = MAX_SCREEN_W // grid_w
+                cell_h = MAX_SCREEN_H // grid_h
+                cell_size = min(cell_w, cell_h, DEFAULT_CELL_SIZE)
+                maze_pixel_w = grid_w * cell_size
+                maze_pixel_h = grid_h * cell_size
+                screen_width = max(MIN_SCREEN_W, min(MAX_SCREEN_W, maze_pixel_w))
+                screen_height = max(MIN_SCREEN_H, min(MAX_SCREEN_H, maze_pixel_h))
+                offset_x = (screen_width - maze_pixel_w) // 2
+                offset_y = (screen_height - maze_pixel_h) // 2
+                reward_font = pygame.font.SysFont(None, 28)
+                if last_reward > 0:
+                    reward_color = (0, 200, 0)
+                    reward_str = f"+{last_reward}"
+                elif last_reward < 0:
+                    reward_color = (200, 0, 0)
+                    reward_str = f"{last_reward}"
+                else:
+                    reward_color = (180, 180, 180)
+                    reward_str = f"0"
+                reward_head = reward_font.render(reward_str, True, reward_color)
+                rx = offset_x + px * cell_size + cell_size // 2 - reward_head.get_width() // 2
+                ry = offset_y + py * cell_size - reward_head.get_height() - 4
+                screen.blit(reward_head, (rx, ry))
+                # Show keyboard controls
+                controls_font = pygame.font.SysFont(None, 24)
+                controls = [
+                    "Q: Quit",
+                    "R: Time up (restart run)",
+                    "P: Hard reset (clear scores, fresh agent)"
+                ]
+                for i, text in enumerate(controls):
+                    surf = controls_font.render(text, True, PLAYER_COLOR)
+                    screen.blit(surf, (10, 140 + i*22))
                 pygame.display.flip()
                 pygame.time.delay(60)
                 # Check for time/step limit
