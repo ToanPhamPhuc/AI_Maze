@@ -7,6 +7,7 @@ import pygame
 from GAME.maze.maze import Maze
 from GAME.configs.config import *
 from collections import defaultdict, deque
+import time
 #endregion
 
 #region: MazeEnvironment
@@ -33,6 +34,8 @@ class MazeEnvironment:
         self.action_space = 4
         self.action_names = ['UP', 'DOWN', 'LEFT', 'RIGHT']
         self.recent_positions = deque(maxlen=self.STUCK_WINDOW)
+        self.failed_move_streak = 0
+        self.last_progress_time = time.time()
     #endregion
 
     #region: reset
@@ -46,6 +49,8 @@ class MazeEnvironment:
         self.steps_since_progress = 0  # For stuck detection
         self.recent_positions = deque(maxlen=self.STUCK_WINDOW)
         self.recent_positions.append(tuple(self.maze.player))
+        self.failed_move_streak = 0
+        self.last_progress_time = time.time()
         return self._get_state()
     #endregion
 
@@ -90,6 +95,9 @@ class MazeEnvironment:
         if moved:
             self.steps += 1
             self.trail[tuple(self.maze.player)] += 1
+            self.failed_move_streak = 0  # Reset failed move streak
+        else:
+            self.failed_move_streak += 1
         # Track recent positions for stuck detection
         self.recent_positions.append(tuple(self.maze.player))
         pos_count = sum(1 for p in self.recent_positions if p == tuple(self.maze.player))
@@ -104,11 +112,13 @@ class MazeEnvironment:
             new_min_dist_bonus = 2.0
             self.min_dist_to_goal = new_dist
             self.steps_since_progress = 0  # Reset on progress
+            self.last_progress_time = time.time()
         else:
             self.steps_since_progress += 1
-            if self.steps_since_progress > 100:
+            # Stuck if no progress for 300 steps or 10 seconds
+            if self.steps_since_progress > 300 or (time.time() - self.last_progress_time > 10):
                 stuck = True
-                print('[DEBUG] Agent stuck: no progress toward goal in 100 steps')
+                print('[DEBUG] Agent stuck: no progress toward goal in {} steps or {} seconds'.format(self.steps_since_progress, int(time.time() - self.last_progress_time)))
         reward = self._calculate_reward(old_pos, moved, old_dist, new_dist) + new_min_dist_bonus
         done = self.maze.is_finished()
         self.last_pos = tuple(self.maze.player)
@@ -132,8 +142,9 @@ class MazeEnvironment:
     def _calculate_reward(self, old_pos, moved, old_dist, new_dist):
         if self.maze.is_finished():
             return 100
+        # Penalty for repeated failed moves (hitting wall)
         if not moved:
-            return -5  # Strong penalty for standing still
+            return -5 - 2 * self.failed_move_streak  # Stronger penalty for repeated failed moves
         dist_reward = 0
         if new_dist < old_dist:
             dist_reward = 1.0
@@ -155,7 +166,11 @@ class MazeEnvironment:
             curiosity_bonus = 10.0  # Big bonus for discovering a new white path
         elif neighbor_trails and self.trail[tuple(self.maze.player)] == min(neighbor_trails):
             curiosity_bonus = 2.0
-        return dist_reward + revisit_penalty + step_penalty + curiosity_bonus
+        # Backtracking reward: reward for moving to a tile with lower trail count than previous
+        backtrack_bonus = 0
+        if self.trail[tuple(self.maze.player)] < self.trail[tuple(old_pos)]:
+            backtrack_bonus = 1.0
+        return dist_reward + revisit_penalty + step_penalty + curiosity_bonus + backtrack_bonus
     #endregion
 
     #region: render
