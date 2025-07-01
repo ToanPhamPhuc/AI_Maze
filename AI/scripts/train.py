@@ -12,10 +12,11 @@ from GAME.configs.config import *
 import json
 #endregion
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-SCORES_DIR = os.path.join(os.path.dirname(__file__), 'AI Scores')
+PERFORMANCE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'performance'))
+SCORES_DIR = os.path.join(PERFORMANCE_DIR, 'AI Scores')
+best_runs_dir = os.path.join(PERFORMANCE_DIR, 'best_runs')
+model_dir = os.path.join(PERFORMANCE_DIR, 'models')
 os.makedirs(SCORES_DIR, exist_ok=True)
-best_runs_dir = os.path.join(os.path.dirname(__file__), 'best_runs')
 os.makedirs(best_runs_dir, exist_ok=True)
 
 #region: Scores
@@ -70,6 +71,12 @@ def replay_best_run(size):
     # Setup environment
     env = MazeEnvironment(height=size, width=size)
     (state, local), done = env.reset(), False
+    # Set the maze, start, end, and player to match the saved run
+    if 'maze' in data and 'start' in data and 'end' in data:
+        env.maze.maze = data['maze']
+        env.maze.start = tuple(data['start'])
+        env.maze.end = tuple(data['end'])
+        env.maze.player = list(env.maze.start)
     screen_width = max(MIN_SCREEN_W, min(MAX_SCREEN_W, (2*size+1)*DEFAULT_CELL_SIZE))
     screen_height = max(MIN_SCREEN_H, min(MAX_SCREEN_H, (2*size+1)*DEFAULT_CELL_SIZE))
     screen = pygame.display.set_mode((screen_width, screen_height))
@@ -111,7 +118,7 @@ def replay_best_run(size):
 def main_menu():
     min_size, max_size = 3, 16
     pygame.init()
-    screen = pygame.display.set_mode((600, 800))
+    screen = pygame.display.set_mode((1366, 768))
     pygame.display.set_caption("Maze AI Trainer Menu")
     font = pygame.font.SysFont(None, 36)
     big_font = pygame.font.SysFont(None, 48)
@@ -190,7 +197,6 @@ def ai_play():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     min_size, max_size = 3, 16  # Use config or curriculum
     runs_per_level = 50
-    model_dir = os.path.join(os.path.dirname(__file__), 'models')
     os.makedirs(model_dir, exist_ok=True)
     # Use the largest state size for the agent
     env = MazeEnvironment(height=max_size, width=max_size)
@@ -266,7 +272,20 @@ def ai_play():
                             done = True
                             break
                         if event.key == pygame.K_p: # key to reset everything: agent, scores, ...
+                            # Remove all high scores
                             for f in glob.glob(os.path.join(SCORES_DIR, 'HighScore*')):
+                                try:
+                                    os.remove(f)
+                                except Exception:
+                                    pass
+                            # Remove all models
+                            for f in glob.glob(os.path.join(model_dir, '*')):
+                                try:
+                                    os.remove(f)
+                                except Exception:
+                                    pass
+                            # Remove all best runs
+                            for f in glob.glob(os.path.join(best_runs_dir, '*.json')):
                                 try:
                                     os.remove(f)
                                 except Exception:
@@ -426,7 +445,10 @@ def ai_play():
                         json.dump({
                             'actions': actions_this_run,
                             'steps': steps,
-                            'time': elapsed
+                            'time': elapsed,
+                            'maze': env.maze.maze,
+                            'start': env.maze.start,
+                            'end': env.maze.end
                         }, f)
                 print(f"Level {size}x{size} Run {run+1}/{runs_per_level}: Steps={steps}, Time={format_time(elapsed)}" + (" NEW HIGH SCORE!" if new_hs else ""))
                 font = pygame.font.SysFont(None, 48)
