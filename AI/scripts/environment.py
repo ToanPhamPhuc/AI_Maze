@@ -138,6 +138,42 @@ class MazeEnvironment:
         return abs(pos[0] - self.maze.end[0]) + abs(pos[1] - self.maze.end[1])
     #endregion
 
+    #region: _dijkstra_distance_to_goal
+    def _dijkstra_distance_to_goal(self, pos=None):
+        """
+        Returns the shortest path length from pos to the goal using Dijkstra's algorithm.
+        If pos is None, uses the current player position.
+        Walls ('#') are impassable.
+        Returns float('inf') if no path exists.
+        """
+        if pos is None:
+            pos = tuple(self.maze.player)
+        else:
+            pos = tuple(pos)  # Ensure tuple for hashing
+        goal = tuple(self.maze.end)
+        if pos == goal:
+            return 0
+        maze = self.maze.maze
+        h, w = len(maze), len(maze[0])
+        visited = set()
+        queue = deque()
+        queue.append((pos, 0))
+        visited.add(pos)
+        dirs = [(-1,0), (1,0), (0,-1), (0,1)]
+        while queue:
+            (y, x), dist = queue.popleft()
+            for dy, dx in dirs:
+                ny, nx = y+dy, x+dx
+                if 0 <= ny < h and 0 <= nx < w and maze[ny][nx] != '#':
+                    npos = (ny, nx)
+                    if npos == goal:
+                        return dist + 1
+                    if npos not in visited:
+                        visited.add(npos)
+                        queue.append((npos, dist+1))
+        return float('inf')
+    #endregion
+
     #region: _calculate_reward
     def _calculate_reward(self, old_pos, moved, old_dist, new_dist):
         if self.maze.is_finished():
@@ -145,11 +181,14 @@ class MazeEnvironment:
         # Penalty for repeated failed moves (hitting wall)
         if not moved:
             return -5 - 2 * self.failed_move_streak  # Stronger penalty for repeated failed moves
+        # Use Dijkstra distance for reward shaping
+        old_dij = self._dijkstra_distance_to_goal(old_pos)
+        new_dij = self._dijkstra_distance_to_goal(tuple(self.maze.player))
         dist_reward = 0
-        if new_dist < old_dist:
-            dist_reward = 1.0
-        elif new_dist > old_dist:
-            dist_reward = -1.0
+        if new_dij < old_dij:
+            dist_reward = 2.0  # Stronger reward for real progress
+        elif new_dij > old_dij:
+            dist_reward = -2.0  # Stronger penalty for moving away
         revisit_penalty = -1.0 * (self.trail[tuple(self.maze.player)] - 1) if self.trail[tuple(self.maze.player)] > 1 else 0
         step_penalty = -0.1
         # Curiosity/Exploration logic
