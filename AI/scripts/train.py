@@ -9,11 +9,14 @@ from environment import MazeEnvironment
 from dqn_model import DQNAgent
 import torch
 from GAME.configs.config import *
+import json
 #endregion
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 SCORES_DIR = os.path.join(os.path.dirname(__file__), 'AI Scores')
 os.makedirs(SCORES_DIR, exist_ok=True)
+best_runs_dir = os.path.join(os.path.dirname(__file__), 'best_runs')
+os.makedirs(best_runs_dir, exist_ok=True)
 
 #region: Scores
 def get_highscore_path(w, h):
@@ -47,6 +50,139 @@ def pad_state(state, target_size):
         return np.concatenate([state, np.zeros(target_size - len(state), dtype=state.dtype)])
     return state
 
+def list_best_runs(min_size, max_size):
+    runs = []
+    for size in range(min_size, max_size+1):
+        path = os.path.join(best_runs_dir, f'best_run_{size}x{size}.json')
+        runs.append(os.path.exists(path))
+    return runs
+
+def replay_best_run(size):
+    path = os.path.join(best_runs_dir, f'best_run_{size}x{size}.json')
+    if not os.path.exists(path):
+        print(f"No best run for {size}x{size}")
+        return
+    with open(path, 'r') as f:
+        data = json.load(f)
+    actions = data['actions']
+    steps = data.get('steps', len(actions))
+    total_time = data.get('time', 0)
+    # Setup environment
+    env = MazeEnvironment(height=size, width=size)
+    (state, local), done = env.reset(), False
+    screen_width = max(MIN_SCREEN_W, min(MAX_SCREEN_W, (2*size+1)*DEFAULT_CELL_SIZE))
+    screen_height = max(MIN_SCREEN_H, min(MAX_SCREEN_H, (2*size+1)*DEFAULT_CELL_SIZE))
+    screen = pygame.display.set_mode((screen_width, screen_height))
+    pygame.display.set_caption(f"Replay: {size}x{size}")
+    clock = pygame.time.Clock()
+    idx = 0
+    while not done and idx < len(actions):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                return
+        action = actions[idx]
+        (next_state, next_local), reward, done, info = env.step(action)
+        state, local = next_state, next_local
+        screen = env.render(screen)
+        font = pygame.font.SysFont(None, 32)
+        msg = font.render(f"Step {idx+1}/{steps}", True, (255,255,0))
+        screen.blit(msg, (10, 10))
+        pygame.display.flip()
+        pygame.time.delay(60)
+        idx += 1
+    # Show finish message
+    font = pygame.font.SysFont(None, 48)
+    msg = font.render("Replay finished! Press ESC to return.", True, (0,200,0))
+    screen.blit(msg, (screen.get_width()//2 - msg.get_width()//2, screen.get_height()//2 - 40))
+    pygame.display.flip()
+    # Wait for ESC
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                return
+        pygame.time.delay(100)
+
+def main_menu():
+    min_size, max_size = 3, 16
+    pygame.init()
+    screen = pygame.display.set_mode((600, 800))
+    pygame.display.set_caption("Maze AI Trainer Menu")
+    font = pygame.font.SysFont(None, 36)
+    big_font = pygame.font.SysFont(None, 48)
+    selected = 0
+    menu_items = [f"Replay {size}x{size}" for size in range(min_size, max_size+1)]
+    menu_items += ["Start Training", "Quit"]
+    item_rects = []
+    while True:
+        screen.fill((30,30,30))
+        runs = list_best_runs(min_size, max_size)
+        y = 60
+        title = big_font.render("Maze AI Trainer", True, (255,255,0))
+        screen.blit(title, (screen.get_width()//2 - title.get_width()//2, 10))
+        item_rects = []
+        for i, item in enumerate(menu_items):
+            color = (255,255,255)
+            if i == selected:
+                color = (0,255,255)
+            if i < max_size-min_size+1:
+                label = f"{item}  [{'Replay' if runs[i] else 'No Replay'}]"
+            else:
+                label = item
+            surf = font.render(label, True, color)
+            rect = surf.get_rect(topleft=(60, y))
+            screen.blit(surf, rect.topleft)
+            item_rects.append(rect)
+            y += 48
+        pygame.display.flip()
+        mouse_pos = pygame.mouse.get_pos()
+        mouse_hover = None
+        for i, rect in enumerate(item_rects):
+            if rect.collidepoint(mouse_pos):
+                mouse_hover = i
+                break
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    selected = (selected - 1) % len(menu_items)
+                elif event.key == pygame.K_DOWN:
+                    selected = (selected + 1) % len(menu_items)
+                elif event.key == pygame.K_RETURN:
+                    if selected < max_size-min_size+1:
+                        if runs[selected]:
+                            replay_best_run(selected+min_size)
+                    elif menu_items[selected] == "Start Training":
+                        return  # Proceed to training
+                    elif menu_items[selected] == "Quit":
+                        pygame.quit()
+                        sys.exit()
+                elif event.key == pygame.K_q:
+                    pygame.quit()
+                    sys.exit()
+            if event.type == pygame.MOUSEMOTION:
+                if mouse_hover is not None:
+                    selected = mouse_hover
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if mouse_hover is not None:
+                    selected = mouse_hover
+                    if selected < max_size-min_size+1:
+                        if runs[selected]:
+                            replay_best_run(selected+min_size)
+                    elif menu_items[selected] == "Start Training":
+                        return
+                    elif menu_items[selected] == "Quit":
+                        pygame.quit()
+                        sys.exit()
+        pygame.time.delay(100)
+
 #region: main AI training
 def ai_play():
     #region: Game init
@@ -62,6 +198,7 @@ def ai_play():
     local_state_size = env.local_state_size
     agent = DQNAgent(global_state_size, local_state_size, 4, device)
     model_path = os.path.join(model_dir, f'maze_dqn_{max_size}x{max_size}.pth')
+    os.makedirs(best_runs_dir, exist_ok=True)
     #endregion
     if os.path.exists(model_path):
         agent.load(model_path)
@@ -72,6 +209,7 @@ def ai_play():
         run = 0
         go_lower = False
         skip = False
+        return_to_menu = False
         while run < runs_per_level:
             # Calculate cell size and window size as in main game
             maze_pixel_w = (2 * size + 1)
@@ -103,6 +241,7 @@ def ai_play():
             else:
                 time_limit = 300
                 step_limit = 500
+            actions_this_run = []
             while not done:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
@@ -112,6 +251,11 @@ def ai_play():
                         if event.key == pygame.K_q:
                             pygame.quit()
                             sys.exit()
+                        if event.key == pygame.K_ESCAPE:
+                            return_to_menu = True
+                            timed_out = True
+                            done = True
+                            break
                         if event.key == pygame.K_r:
                             font = pygame.font.SysFont(None, 48)
                             msg = font.render("Time up! (Manual)", True, (200,0,0))
@@ -175,6 +319,7 @@ def ai_play():
                     continue
                 padded_state = pad_state(state, global_state_size)
                 action = agent.act(padded_state, local, training=True)
+                actions_this_run.append(int(action))
                 (next_state, next_local), reward, done, info = env.step(action)
                 padded_next_state = pad_state(next_state, global_state_size)
                 agent.remember(padded_state, local, action, reward, padded_next_state, next_local, done)
@@ -275,6 +420,14 @@ def ai_play():
                 if hs_time is None or elapsed < hs_time or (elapsed == hs_time and steps < hs_steps):
                     save_highscore(size, size, elapsed, steps)
                     new_hs = True
+                    # Save best run actions
+                    best_run_path = os.path.join(best_runs_dir, f'best_run_{size}x{size}.json')
+                    with open(best_run_path, 'w') as f:
+                        json.dump({
+                            'actions': actions_this_run,
+                            'steps': steps,
+                            'time': elapsed
+                        }, f)
                 print(f"Level {size}x{size} Run {run+1}/{runs_per_level}: Steps={steps}, Time={format_time(elapsed)}" + (" NEW HIGH SCORE!" if new_hs else ""))
                 font = pygame.font.SysFont(None, 48)
                 msg = font.render("Goal reached!", True, (0,200,0))
@@ -291,6 +444,11 @@ def ai_play():
                 break
             if skip:
                 break
+            if return_to_menu:
+                break
+        if return_to_menu:
+            main_menu()
+            return
         if go_lower and size > min_size:
             size -= 1
             continue
@@ -299,5 +457,7 @@ def ai_play():
     pygame.quit()
 
 if __name__ == "__main__":
-    ai_play() 
+    while True:
+        main_menu()
+        ai_play() 
 #endregion
