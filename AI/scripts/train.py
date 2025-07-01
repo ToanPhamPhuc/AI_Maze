@@ -348,6 +348,7 @@ def ai_play():
                 total_reward += reward
                 last_reward = reward
                 elapsed = int(time.time() - start_time)
+                moved = info.get('moved', True)
                 screen = env.render(screen)
                 # Draw overlays and stats
                 font = pygame.font.SysFont(None, 28)
@@ -418,6 +419,16 @@ def ai_play():
                 ry = offset_y + py * cell_size - 28
                 reward_head = reward_font.render(reward_str, True, reward_color)
                 screen.blit(reward_head, (rx - reward_head.get_width() // 2, ry))
+                # Bump effect: flash player cell red if not moved
+                if not moved:
+                    # Draw the bump (red player cell) on top of the current screen, without clearing overlays/text
+                    bump_rect = pygame.Rect(offset_x + px * cell_size, offset_y + py * cell_size, cell_size, cell_size)
+                    bump_surface = pygame.Surface((cell_size, cell_size))
+                    bump_surface.fill((255, 0, 0))
+                    screen.blit(bump_surface, (offset_x + px * cell_size, offset_y + py * cell_size))
+                    pygame.display.flip()
+                    pygame.time.delay(80)
+                    # No need to redraw overlays/text here, as they were never erased
                 pygame.display.flip()
                 pygame.time.delay(60)
                 # Dynamic time/step punishment
