@@ -1,3 +1,4 @@
+#! python3
 #region: Imports
 import sys
 import os
@@ -10,6 +11,7 @@ from dqn_model import DQNAgent
 import torch
 from GAME.configs.config import *
 import json
+import pickle
 #endregion
 
 PERFORMANCE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'performance'))
@@ -22,7 +24,7 @@ os.makedirs(best_runs_dir, exist_ok=True)
 #region: Scores
 def get_highscore_path(w, h):
     # Cleaned up to avoid hidden characters or encoding issues
-    return os.path.join(SCORES_DIR, f'HighScore{w}x{h}')
+    return os.path.join(SCORES_DIR, 'HighScore{w}x{h}'.format(w=w, h=h))
 
 def load_highscore(w, h):
     path = get_highscore_path(w, h)
@@ -38,13 +40,13 @@ def load_highscore(w, h):
 def save_highscore(w, h, time_sec, steps):
     path = get_highscore_path(w, h)
     with open(path, 'w') as f:
-        f.write(f'{time_sec},{steps}')
+        f.write('{time_sec},{steps}'.format(time_sec=time_sec, steps=steps))
 #endregion
 
 def format_time(seconds):
     m = seconds // 60
     s = seconds % 60
-    return f"{m}m{s}s" if m else f"{s}s"
+    return "{m}m{s}s".format(m=m, s=s) if m else "{s}s".format(s=s)
 
 def pad_state(state, target_size):
     if len(state) < target_size:
@@ -54,14 +56,14 @@ def pad_state(state, target_size):
 def list_best_runs(min_size, max_size):
     runs = []
     for size in range(min_size, max_size+1):
-        path = os.path.join(best_runs_dir, f'best_run_{size}x{size}.json')
+        path = os.path.join(best_runs_dir, 'best_run_{size}x{size}.json'.format(size=size))
         runs.append(os.path.exists(path))
     return runs
 
 def replay_best_run(size):
-    path = os.path.join(best_runs_dir, f'best_run_{size}x{size}.json')
+    path = os.path.join(best_runs_dir, 'best_run_{size}x{size}.json'.format(size=size))
     if not os.path.exists(path):
-        print(f"No best run for {size}x{size}")
+        print("No best run for {size}x{size}".format(size=size))
         return
     with open(path, 'r') as f:
         data = json.load(f)
@@ -80,7 +82,7 @@ def replay_best_run(size):
     screen_width = max(MIN_SCREEN_W, min(MAX_SCREEN_W, (2*size+1)*DEFAULT_CELL_SIZE))
     screen_height = max(MIN_SCREEN_H, min(MAX_SCREEN_H, (2*size+1)*DEFAULT_CELL_SIZE))
     screen = pygame.display.set_mode((screen_width, screen_height))
-    pygame.display.set_caption(f"Replay: {size}x{size}")
+    pygame.display.set_caption("Replay: {size}x{size}".format(size=size))
     clock = pygame.time.Clock()
     idx = 0
     while not done and idx < len(actions):
@@ -95,7 +97,7 @@ def replay_best_run(size):
         state, local = next_state, next_local
         screen = env.render(screen)
         font = pygame.font.SysFont(None, 32)
-        msg = font.render(f"Step {idx+1}/{steps}", True, (255,255,0))
+        msg = font.render("Step {idx}/{steps}".format(idx=idx+1, steps=steps), True, (255,255,0))
         screen.blit(msg, (10, 10))
         pygame.display.flip()
         pygame.time.delay(60)
@@ -123,7 +125,7 @@ def main_menu():
     font = pygame.font.SysFont(None, 36)
     big_font = pygame.font.SysFont(None, 48)
     selected = 0
-    menu_items = [f"Replay {size}x{size}" for size in range(min_size, max_size+1)]
+    menu_items = ["Replay {size}x{size}".format(size=size) for size in range(min_size, max_size+1)]
     menu_items += ["Start Training", "Quit"]
     item_rects = []
     while True:
@@ -138,7 +140,8 @@ def main_menu():
             if i == selected:
                 color = (0,255,255)
             if i < max_size-min_size+1:
-                label = f"{item}  [{'Replay' if runs[i] else 'No Replay'}]"
+                status = 'Replay' if runs[i] else 'No Replay'
+                label = "{}  [{}]".format(item, status)
             else:
                 label = item
             surf = font.render(label, True, color)
@@ -203,16 +206,31 @@ def ai_play():
     global_state_size = env.state_size
     local_state_size = env.local_state_size
     agent = DQNAgent(global_state_size, local_state_size, 4, device)
-    model_path = os.path.join(model_dir, f'maze_dqn_{max_size}x{max_size}.pth')
+    model_path = os.path.join(model_dir, 'maze_dqn_{max_size}x{max_size}.pth'.format(max_size=max_size))
     os.makedirs(best_runs_dir, exist_ok=True)
     #endregion
     if os.path.exists(model_path):
         agent.load(model_path)
-        print(f"Loaded model for {max_size}x{max_size}")
-    size = min_size
+        print("Loaded model for {max_size}x{max_size}".format(max_size=max_size))
+    # On training start, check for progress
+    resume = False
+    if os.path.exists(progress_path) and os.path.exists(progress_model_path):
+        pygame.init()
+        screen = pygame.display.set_mode((1366, 768))
+        pygame.display.set_caption("Resume Progress?")
+        resume = yes_no_popup(screen, "Resume previous training?")
+        pygame.display.quit()
+    if resume:
+        loaded = load_progress(agent)
+        if loaded:
+            size, run = loaded
+        else:
+            size, run = min_size, 0
+    else:
+        clear_progress()
+        size, run = min_size, 0
     while size <= max_size:
-        print(f"Level: {size}x{size}")
-        run = 0
+        print("Level: {size}x{size}".format(size=size))
         go_lower = False
         skip = False
         return_to_menu = False
@@ -254,10 +272,16 @@ def ai_play():
                         pygame.quit()
                         sys.exit()
                     if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_q:
-                            pygame.quit()
-                            sys.exit()
-                        if event.key == pygame.K_ESCAPE:
+                        if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
+                            save = yes_no_popup(screen, "Save progress?")
+                            if save:
+                                save_progress(size, run, agent)
+                            else:
+                                clear_progress()
+                                size, run = min_size, 0
+                            if event.key == pygame.K_q:
+                                pygame.quit()
+                                sys.exit()
                             return_to_menu = True
                             timed_out = True
                             done = True
@@ -313,7 +337,7 @@ def ai_play():
                             timed_out = True
                             done = True
                             skip = True
-                            print(f"[INFO] Skipped {size}x{size} maze.")
+                            print("[INFO] Skipped {size}x{size} maze.".format(size=size))
                             break
                         if event.key == pygame.K_l:
                             if size > min_size:
@@ -325,7 +349,7 @@ def ai_play():
                                 timed_out = True
                                 done = True
                                 go_lower = True
-                                print(f"[INFO] Returned to previous size from {size}x{size} maze.")
+                                print("[INFO] Returned to previous size from {size}x{size} maze.".format(size=size))
                                 break
                 if timed_out:
                     break
@@ -353,30 +377,30 @@ def ai_play():
                 # Draw overlays and stats
                 font = pygame.font.SysFont(None, 28)
                 y = 0
-                res_str = f"Resolution: {screen.get_width()}x{screen.get_height()}"
+                res_str = "Resolution: {w}x{h}".format(w=screen.get_width(), h=screen.get_height())
                 res_surf = font.render(res_str, True, (255,255,255))
                 screen.blit(res_surf, (10, y))
                 y += res_surf.get_height() + 5
-                steps_surf = font.render(f"Steps: {steps}", True, (255,255,255))
+                steps_surf = font.render("Steps: {steps}".format(steps=steps), True, (255,255,255))
                 screen.blit(steps_surf, (10, y))
                 y += steps_surf.get_height() + 5
-                time_surf = font.render(f"Time: {format_time(elapsed)}", True, (255,255,255))
+                time_surf = font.render("Time: {time}".format(time=format_time(elapsed)), True, (255,255,255))
                 screen.blit(time_surf, (10, y))
                 y += time_surf.get_height() + 5
-                diff_str = f'{size}x{size}'
-                diff_surf = font.render(f"Current: {diff_str}", True, (255,255,0))
+                diff_str = "{size}x{size}".format(size=size)
+                diff_surf = font.render("Current: {diff_str}".format(diff_str=diff_str), True, (255,255,0))
                 screen.blit(diff_surf, (10, y))
                 y += diff_surf.get_height() + 5
                 # Show time/step limits
-                lim_surf = font.render(f"Limit: {format_time(time_limit)}, {step_limit} steps", True, (255,128,0))
+                lim_surf = font.render("Limit: {time_limit}, {step_limit} steps".format(time_limit=format_time(time_limit), step_limit=step_limit), True, (255,128,0))
                 screen.blit(lim_surf, (10, y))
                 y += lim_surf.get_height() + 5
                 hs_time, hs_steps = load_highscore(size, size)
                 if hs_time is not None:
-                    hs_surf = font.render(f"Best: {format_time(hs_time)}, {hs_steps} steps", True, (0,255,0))
+                    hs_surf = font.render("Best: {time}, {steps} steps".format(time=format_time(hs_time), steps=hs_steps), True, (0,255,0))
                     screen.blit(hs_surf, (10, y))
                     y += hs_surf.get_height() + 5
-                reward_surf = font.render(f"Total Reward: {total_reward:.1f}", True, (255, 200, 0))
+                reward_surf = font.render("Total Reward: {reward:.1f}".format(reward=total_reward), True, (255, 200, 0))
                 screen.blit(reward_surf, (10, y))
                 y += reward_surf.get_height() + 5
                 # Show controls
@@ -399,13 +423,13 @@ def ai_play():
                 reward_font = pygame.font.SysFont(None, 28)
                 if last_reward > 0:
                     reward_color = (0, 200, 0)
-                    reward_str = f"+{last_reward:.1f}"
+                    reward_str = "+{last_reward:.1f}".format(last_reward=last_reward)
                 elif last_reward < 0:
                     reward_color = (200, 0, 0)
-                    reward_str = f"{last_reward:.1f}"
+                    reward_str = "{last_reward:.1f}".format(last_reward=last_reward)
                 else:
                     reward_color = (180, 180, 180)
-                    reward_str = f"0.0"
+                    reward_str = "0.0"
                 # Centered above player
                 grid_h = len(env.maze.maze)
                 grid_w = len(env.maze.maze[0])
@@ -451,7 +475,7 @@ def ai_play():
                     save_highscore(size, size, elapsed, steps)
                     new_hs = True
                     # Save best run actions
-                    best_run_path = os.path.join(best_runs_dir, f'best_run_{size}x{size}.json')
+                    best_run_path = os.path.join(best_runs_dir, 'best_run_{size}x{size}.json'.format(size=size))
                     with open(best_run_path, 'w') as f:
                         json.dump({
                             'actions': actions_this_run,
@@ -461,7 +485,9 @@ def ai_play():
                             'start': env.maze.start,
                             'end': env.maze.end
                         }, f)
-                print(f"Level {size}x{size} Run {run+1}/{runs_per_level}: Steps={steps}, Time={format_time(elapsed)}" + (" NEW HIGH SCORE!" if new_hs else ""))
+                print("Level {size}x{size} Run {run}/{runs_per_level}: Steps={steps}, Time={time}{extra}".format(
+                    size=size, run=run+1, runs_per_level=runs_per_level, steps=steps, time=format_time(elapsed),
+                    extra=" NEW HIGH SCORE!" if new_hs else ""))
                 font = pygame.font.SysFont(None, 48)
                 msg = font.render("Goal reached!", True, (0,200,0))
                 screen.blit(msg, (screen.get_width()//2 - msg.get_width()//2, screen.get_height()//2 - 40))
@@ -469,10 +495,11 @@ def ai_play():
                 pygame.time.delay(1200)
                 if new_hs:
                     agent.save(model_path)
-                    print(f"Model saved to {model_path} (new high score!)")
+                    print("Model saved to {model_path} (new high score!)".format(model_path=model_path))
                 run += 1
             else:
-                print(f"Level {size}x{size} Run {run+1}/{runs_per_level}: Time up! (Steps={steps}, Time={format_time(elapsed)})")
+                print("Level {size}x{size} Run {run}/{runs_per_level}: Time up! (Steps={steps}, Time={time})".format(
+                    size=size, run=run+1, runs_per_level=runs_per_level, steps=steps, time=format_time(elapsed)))
             if go_lower:
                 break
             if skip:
@@ -484,10 +511,81 @@ def ai_play():
             return
         if go_lower and size > min_size:
             size -= 1
+            run = 0
             continue
         size += 1
+        run = 0
+    clear_progress()
     print("All levels complete!")
     pygame.quit()
+
+progress_path = os.path.join(PERFORMANCE_DIR, 'progress.json')
+progress_model_path = os.path.join(PERFORMANCE_DIR, 'progress_model.pth')
+
+def save_progress(size, run, agent):
+    # Save state
+    with open(progress_path, 'w') as f:
+        json.dump({'size': size, 'run': run}, f)
+    # Save model
+    agent.save(progress_model_path)
+
+def load_progress(agent):
+    if not os.path.exists(progress_path) or not os.path.exists(progress_model_path):
+        return None, None
+    with open(progress_path, 'r') as f:
+        data = json.load(f)
+    agent.load(progress_model_path)
+    return data['size'], data['run']
+
+def clear_progress():
+    if os.path.exists(progress_path):
+        os.remove(progress_path)
+    if os.path.exists(progress_model_path):
+        os.remove(progress_model_path)
+
+def yes_no_popup(screen, message):
+    font = pygame.font.SysFont(None, 48)
+    w, h = 500, 200
+    popup = pygame.Surface((w, h))
+    popup.fill((40, 40, 40))
+    rect = popup.get_rect(center=(screen.get_width()//2, screen.get_height()//2))
+    msg = font.render(message, True, (255,255,0))
+    popup.blit(msg, (w//2 - msg.get_width()//2, 40))
+    yes = font.render('Yes', True, (0,255,0))
+    no = font.render('No', True, (255,0,0))
+    popup.blit(yes, (w//4 - yes.get_width()//2, 120))
+    popup.blit(no, (3*w//4 - no.get_width()//2, 120))
+    screen.blit(popup, rect.topleft)
+    pygame.display.flip()
+    selected = 0
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key in [pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d]:
+                    selected = 1 - selected
+                if event.key == pygame.K_RETURN:
+                    return selected == 0  # Yes if 0, No if 1
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mx, my = pygame.mouse.get_pos()
+                if rect.left + w//4 - yes.get_width()//2 < mx < rect.left + w//4 + yes.get_width()//2 and rect.top + 120 < my < rect.top + 120 + yes.get_height():
+                    return True
+                if rect.left + 3*w//4 - no.get_width()//2 < mx < rect.left + 3*w//4 + no.get_width()//2 and rect.top + 120 < my < rect.top + 120 + no.get_height():
+                    return False
+        # Highlight
+        popup.fill((40, 40, 40))
+        popup.blit(msg, (w//2 - msg.get_width()//2, 40))
+        if selected == 0:
+            pygame.draw.rect(popup, (0,255,0), (w//4-yes.get_width()//2-10, 120-10, yes.get_width()+20, yes.get_height()+20), 3)
+        else:
+            pygame.draw.rect(popup, (255,0,0), (3*w//4-no.get_width()//2-10, 120-10, no.get_width()+20, no.get_height()+20), 3)
+        popup.blit(yes, (w//4 - yes.get_width()//2, 120))
+        popup.blit(no, (3*w//4 - no.get_width()//2, 120))
+        screen.blit(popup, rect.topleft)
+        pygame.display.flip()
+        pygame.time.delay(30)
 
 if __name__ == "__main__":
     while True:
