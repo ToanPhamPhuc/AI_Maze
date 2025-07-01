@@ -133,20 +133,29 @@ class MazeEnvironment:
         if self.maze.is_finished():
             return 100
         if not moved:
-            return -10
-        # Reward shaping: positive for getting closer, negative for getting further
+            return -5  # Strong penalty for standing still
         dist_reward = 0
         if new_dist < old_dist:
-            dist_reward = 1.0  # reward for getting closer
+            dist_reward = 1.0
         elif new_dist > old_dist:
-            dist_reward = -1.0  # penalty for getting further
-        # Mild revisit penalty
-        revisit_penalty = -0.05 * (self.trail[tuple(self.maze.player)] - 1) if self.trail[tuple(self.maze.player)] > 1 else 0
-        # Small step penalty
+            dist_reward = -1.0
+        revisit_penalty = -1.0 * (self.trail[tuple(self.maze.player)] - 1) if self.trail[tuple(self.maze.player)] > 1 else 0
         step_penalty = -0.1
-        # Exploration bonus for first visit
-        exploration_bonus = 0.2 if self.trail[tuple(self.maze.player)] == 1 else 0
-        return dist_reward + revisit_penalty + step_penalty + exploration_bonus
+        # Curiosity/Exploration logic
+        y, x = self.maze.player
+        dirs = [(-1,0), (1,0), (0,-1), (0,1)]
+        neighbor_trails = []
+        for dy, dx in dirs:
+            ny, nx = y+dy, x+dx
+            if 0 <= ny < len(self.maze.maze) and 0 <= nx < len(self.maze.maze[0]):
+                if self.maze.maze[ny][nx] != '#':
+                    neighbor_trails.append(self.trail[(ny, nx)])
+        curiosity_bonus = 0
+        if self.trail[tuple(self.maze.player)] == 1 and (0 in neighbor_trails):
+            curiosity_bonus = 10.0  # Big bonus for discovering a new white path
+        elif neighbor_trails and self.trail[tuple(self.maze.player)] == min(neighbor_trails):
+            curiosity_bonus = 2.0
+        return dist_reward + revisit_penalty + step_penalty + curiosity_bonus
     #endregion
 
     #region: render
