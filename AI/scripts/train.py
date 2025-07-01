@@ -6,7 +6,7 @@ import time
 import numpy as np
 import pygame
 from environment import MazeEnvironment
-from scripts.dqn_model import DQNAgent
+from dqn_model import DQNAgent
 import torch
 from GAME.configs.config import *
 #endregion
@@ -66,9 +66,12 @@ def ai_play():
     if os.path.exists(model_path):
         agent.load(model_path)
         print(f"Loaded model for {max_size}x{max_size}")
-    for size in range(min_size, max_size+1):
+    size = min_size
+    while size <= max_size:
         print(f"Level: {size}x{size}")
         run = 0
+        go_lower = False
+        skip = False
         while run < runs_per_level:
             # Calculate cell size and window size as in main game
             maze_pixel_w = (2 * size + 1)
@@ -92,7 +95,10 @@ def ai_play():
             # Dynamic time/step limits based on high score
             hs_time, hs_steps = load_highscore(size, size)
             if hs_time is not None and hs_steps is not None:
-                time_limit = 10 * hs_time
+                if hs_time == 0:
+                    time_limit = 10
+                else:
+                    time_limit = 10 * hs_time
                 step_limit = 10 * hs_steps
             else:
                 time_limit = 300
@@ -135,6 +141,29 @@ def ai_play():
                             env.show_trail = show_trail
                         if event.key == pygame.K_RETURN:
                             freeze = not freeze
+                        if event.key == pygame.K_o:
+                            font = pygame.font.SysFont(None, 48)
+                            msg = font.render("Skipped to next size!", True, (0,128,255))
+                            screen.blit(msg, (screen.get_width()//2 - msg.get_width()//2, screen.get_height()//2 - 40))
+                            pygame.display.flip()
+                            pygame.time.delay(1000)
+                            timed_out = True
+                            done = True
+                            skip = True
+                            print(f"[INFO] Skipped {size}x{size} maze.")
+                            break
+                        if event.key == pygame.K_l:
+                            if size > min_size:
+                                font = pygame.font.SysFont(None, 48)
+                                msg = font.render("Returned to previous size!", True, (0,128,255))
+                                screen.blit(msg, (screen.get_width()//2 - msg.get_width()//2, screen.get_height()//2 - 40))
+                                pygame.display.flip()
+                                pygame.time.delay(1000)
+                                timed_out = True
+                                done = True
+                                go_lower = True
+                                print(f"[INFO] Returned to previous size from {size}x{size} maze.")
+                                break
                 if timed_out:
                     break
                 if freeze:
@@ -192,7 +221,9 @@ def ai_play():
                     "R: Time up (restart run)",
                     "P: Hard reset (clear scores, fresh agent)",
                     "T: Toggle trail",
-                    "Enter: Freeze/Unfreeze"
+                    "Enter: Freeze/Unfreeze",
+                    "O: Skip to next size",
+                    "L: Go to previous size"
                 ]
                 for i, text in enumerate(controls):
                     surf = controls_font.render(text, True, (255,255,0))
@@ -256,6 +287,14 @@ def ai_play():
                 run += 1
             else:
                 print(f"Level {size}x{size} Run {run+1}/{runs_per_level}: Time up! (Steps={steps}, Time={format_time(elapsed)})")
+            if go_lower:
+                break
+            if skip:
+                break
+        if go_lower and size > min_size:
+            size -= 1
+            continue
+        size += 1
     print("All levels complete!")
     pygame.quit()
 

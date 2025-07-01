@@ -6,7 +6,7 @@ import numpy as np
 import pygame
 from GAME.maze.maze import Maze
 from GAME.configs.config import *
-from collections import defaultdict
+from collections import defaultdict, deque
 #endregion
 
 #region: MazeEnvironment
@@ -16,6 +16,8 @@ class MazeEnvironment:
     Returns both global state (full maze + player pos) and local wall state (up, down, left, right).
     Tracks and renders player trail as a heatmap.
     """
+    STUCK_WINDOW = 50  # Number of recent steps to track
+    STUCK_REPEAT_THRESHOLD = 10  # Max times a position can be visited in window before considered stuck
     #region: __init__
     def __init__(self, height=8, width=8, cell_size=None):
         self.height = height
@@ -30,6 +32,7 @@ class MazeEnvironment:
         self.local_state_size = 4  # up, down, left, right
         self.action_space = 4
         self.action_names = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+        self.recent_positions = deque(maxlen=self.STUCK_WINDOW)
     #endregion
 
     #region: reset
@@ -41,6 +44,8 @@ class MazeEnvironment:
         self.last_pos = tuple(self.maze.player)
         self.min_dist_to_goal = self._manhattan_to_goal(self.maze.player)  # Track best distance this episode
         self.steps_since_progress = 0  # For stuck detection
+        self.recent_positions = deque(maxlen=self.STUCK_WINDOW)
+        self.recent_positions.append(tuple(self.maze.player))
         return self._get_state()
     #endregion
 
@@ -85,10 +90,16 @@ class MazeEnvironment:
         if moved:
             self.steps += 1
             self.trail[tuple(self.maze.player)] += 1
+        # Track recent positions for stuck detection
+        self.recent_positions.append(tuple(self.maze.player))
+        pos_count = sum(1 for p in self.recent_positions if p == tuple(self.maze.player))
+        stuck = False
+        if pos_count > self.STUCK_REPEAT_THRESHOLD:
+            stuck = True
+            print('[DEBUG] Agent stuck: position {} visited {} times in last {} steps'.format(tuple(self.maze.player), pos_count, self.STUCK_WINDOW))
         new_dist = self._manhattan_to_goal(self.maze.player)
         # New minimum distance bonus
         new_min_dist_bonus = 0
-        stuck = False
         if new_dist < getattr(self, 'min_dist_to_goal', float('inf')):
             new_min_dist_bonus = 2.0
             self.min_dist_to_goal = new_dist
@@ -97,6 +108,7 @@ class MazeEnvironment:
             self.steps_since_progress += 1
             if self.steps_since_progress > 100:
                 stuck = True
+                print('[DEBUG] Agent stuck: no progress toward goal in 100 steps')
         reward = self._calculate_reward(old_pos, moved, old_dist, new_dist) + new_min_dist_bonus
         done = self.maze.is_finished()
         self.last_pos = tuple(self.maze.player)
