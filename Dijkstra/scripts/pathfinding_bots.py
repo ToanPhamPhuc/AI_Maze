@@ -196,6 +196,7 @@ class BotRunner:
             if current_time - self.last_render_time > self.render_interval:
                 self.render_bot()
                 self.last_render_time = current_time
+            time.sleep(0.02)  # Slow down the search for visible animation
 
     def render_bot(self):
         """Render this bot's maze"""
@@ -267,15 +268,16 @@ def render_status(screen, bot, x_offset, y_offset, cell_size):
     screen.blit(name_text, (x_offset, y_offset - 30))
     
     if bot.finished:
-        # Status information
-        elapsed = bot.end_time - bot.start_time if bot.start_time and bot.end_time else None
-        time_text = small_font.render(f'Time: {format_time(elapsed)}', True, (255, 255, 255))
-        steps_text = small_font.render(f'Steps: {bot.steps}', True, (255, 255, 255))
-        expanded_text = small_font.render(f'Expanded: {bot.expanded_count}', True, (255, 255, 255))
+        # Status information TODO
+        # elapsed = bot.end_time - bot.start_time if bot.start_time and bot.end_time else None
+        # time_text = small_font.render(f'Time: {format_time(elapsed)}', True, (255, 255, 255))
+        # steps_text = small_font.render(f'Steps: {bot.steps}', True, (255, 255, 255))
+        # expanded_text = small_font.render(f'Expanded: {bot.expanded_count}', True, (255, 255, 255))
         
-        screen.blit(time_text, (x_offset, y_offset + len(bot.env.maze.maze) * cell_size + 5))
-        screen.blit(steps_text, (x_offset, y_offset + len(bot.env.maze.maze) * cell_size + 20))
-        screen.blit(expanded_text, (x_offset, y_offset + len(bot.env.maze.maze) * cell_size + 35))
+        # screen.blit(time_text, (x_offset, y_offset + len(bot.env.maze.maze) * cell_size + 5))
+        # screen.blit(steps_text, (x_offset, y_offset + len(bot.env.maze.maze) * cell_size + 20))
+        # screen.blit(expanded_text, (x_offset, y_offset + len(bot.env.maze.maze) * cell_size + 35))
+        pass
     else:
         # Running status
         status_text = small_font.render('Running...', True, (255, 255, 0))
@@ -369,20 +371,21 @@ def run_comparison(screen, width, height):
         BotRunner("BFS", solve_bfs, (255, 255, 0))               # Yellow
     ]
     
-    # Calculate layout for 1366x768 minimum resolution
+    # Calculate max allowed grid area (2/3 of 1366x768)
+    max_grid_width = int(1366 * 2 / 3)
+    max_grid_height = int(768 * 2 / 3)
     maze_size = width
-    cell_size = 15  # Smaller cells to fit 4 mazes + table
     maze_pixel_size = maze_size * 2 + 1  # Account for wall cells
+    # Compute cell size so that 2x2 grid fits in max area
+    cell_size_w = max_grid_width // (2 * maze_pixel_size)
+    cell_size_h = max_grid_height // (2 * maze_pixel_size)
+    cell_size = max(2, min(cell_size_w, cell_size_h))  # Minimum cell size 2px for visibility
     total_maze_size = maze_pixel_size * cell_size
     
     # Layout calculations
-    # Left side: 2x2 grid of mazes
-    # Right side: comparison table and controls
     left_width = total_maze_size * 2 + 50  # 2 mazes wide + padding
     right_width = 400  # Space for table and controls
     total_width = left_width + right_width
-    
-    # Ensure minimum resolution of 1366x768
     screen_width = max(1366, total_width)
     screen_height = max(768, total_maze_size * 2 + 100)  # 2 mazes high + status area
     
