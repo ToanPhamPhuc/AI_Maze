@@ -18,9 +18,9 @@ DIFFICULTY_MAP = {
 
 # High score file names
 SCORE_FILES = {
-    0: os.path.join(SCORES_DIR, 'BeginnerHighScore.txt'),
-    1: os.path.join(SCORES_DIR, 'IntermediateHighScore.txt'),
-    2: os.path.join(SCORES_DIR, 'ExpertHighScore.txt'),
+    0: os.path.join(SCORES_DIR, 'DFSBeginnerHighScore.txt'),
+    1: os.path.join(SCORES_DIR, 'DFSIntermediateHighScore.txt'),
+    2: os.path.join(SCORES_DIR, 'DFSExpertHighScore.txt'),
 }
 
 def load_highscores():
@@ -50,11 +50,46 @@ def format_time(seconds):
     ms = int((seconds - int(seconds)) * 1000)
     return '{}m {}s {}ms'.format(m, s, ms)
 
-def animate_dijkstra_search(env, screen, delay=10):
+def solve_with_dfs(env, on_expand=None, delay=0, screen=None):
+    """
+    Returns a path from start to goal using Depth-First Search algorithm as a list of (y, x) positions.
+    If on_expand is provided, it is called with each expanded cell (y, x).
+    """
+    start = tuple(env.maze.player)
+    goal = tuple(env.maze.end)
+    maze = env.maze.maze
+    h, w = len(maze), len(maze[0])
+    visited = set()
+    stack = [(start, [start])]
+    visited.add(start)
+    dirs = [(-1,0), (1,0), (0,-1), (0,1)]
+    
+    while stack:
+        (y, x), path = stack.pop()
+        if (y, x) == goal:
+            env.solution_path = path
+            return path
+        for dy, dx in dirs:
+            ny, nx = y+dy, x+dx
+            if 0 <= ny < h and 0 <= nx < w and maze[ny][nx] != '#':
+                npos = (ny, nx)
+                if npos not in visited:
+                    visited.add(npos)
+                    stack.append((npos, path + [npos]))
+                    env.expanded.add(npos)
+                    if on_expand:
+                        on_expand(npos)
+                    if delay > 0 and screen is not None:
+                        env.render(screen, show_solution=False, highlight=npos)
+                        pygame.time.delay(delay)
+    env.solution_path = []
+    return []
+
+def animate_dfs_search(env, screen, delay=10):
     def on_expand(pos):
         env.render(screen, show_solution=False, highlight=pos)
         pygame.time.delay(delay)
-    env.solve_with_dijkstra(on_expand=on_expand, delay=0, screen=screen)
+    solve_with_dfs(env, on_expand=on_expand, delay=0, screen=screen)
 
 def animate_solution(env, screen, delay=60):
     for pos in env.solution_path[1:]:
@@ -65,7 +100,7 @@ def animate_solution(env, screen, delay=60):
 def main():
     pygame.init()
     screen = pygame.display.set_mode((MIN_SCREEN_W, MIN_SCREEN_H))
-    pygame.display.set_caption('Dijkstra Maze Bot')
+    pygame.display.set_caption('DFS Maze Bot')
     clock = pygame.time.Clock()
     running = True
     selected_idx = 0
@@ -114,13 +149,13 @@ def main():
                                             width_str += event.unicode
                                         else:
                                             height_str += event.unicode
-                        run_dijkstra_bot(screen, width, height, None)
+                        run_dfs_bot(screen, width, height, None)
                         highscores = load_highscores()
                     elif selected_idx == 4:  # Quit
                         running = False
                     else:
                         width, height = DIFFICULTY_MAP[selected_idx]
-                        run_dijkstra_bot(screen, width, height, selected_idx)
+                        run_dfs_bot(screen, width, height, selected_idx)
                         highscores = load_highscores()
                 elif event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
                     running = False
@@ -157,33 +192,33 @@ def main():
                                                 width_str += event.unicode
                                             else:
                                                 height_str += event.unicode
-                            run_dijkstra_bot(screen, width, height, None)
+                            run_dfs_bot(screen, width, height, None)
                             highscores = load_highscores()
                         elif i == 4:  # Quit
                             running = False
                         else:
                             width, height = DIFFICULTY_MAP[i]
-                            run_dijkstra_bot(screen, width, height, i)
+                            run_dfs_bot(screen, width, height, i)
                             highscores = load_highscores()
         clock.tick(30)
     pygame.quit()
 
-def run_dijkstra_bot(screen, width, height, score_idx):
+def run_dfs_bot(screen, width, height, score_idx):
     runs = 10
     best_time = None
     best_steps = None
     for run in range(1, runs+1):
         env = MazeEnvironment(height, width)
         env.reset()
-        # Animate Dijkstra search (scan/expand)
-        animate_dijkstra_search(env, screen, delay=10)
+        # Animate DFS search (scan/expand)
+        animate_dfs_search(env, screen, delay=10)
         # Now animate the final path
         start_time = time.time()
         steps = len(env.solution_path) - 1
         animate_solution(env, screen, delay=60)
         elapsed = time.time() - start_time
         # Show result
-        show_result(screen, run, runs, elapsed, steps)
+        show_result(screen, run, runs, elapsed, steps, env)
         # Allow quit between runs
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -201,16 +236,20 @@ def run_dijkstra_bot(screen, width, height, score_idx):
         if prev_time is None or best_time < prev_time:
             save_highscore(score_idx, best_time, best_steps)
 
-def show_result(screen, run, runs, elapsed, steps):
+def show_result(screen, run, runs, elapsed, steps, env):
     font = pygame.font.SysFont(None, 48)
     small_font = pygame.font.SysFont(None, 32)
     screen.fill((30,30,30))
     msg = font.render('Run {}/{}'.format(run, runs), True, (255,255,0))
     tmsg = small_font.render('Time: {}'.format(format_time(elapsed)), True, (255,255,255))
     smsg = small_font.render('Steps: {}'.format(steps), True, (255,255,255))
+    dmsg = small_font.render('Distance: {}'.format(steps), True, (255,255,255))
+    emsg = small_font.render('Expanded: {}'.format(len(env.expanded)), True, (255,255,255))
     screen.blit(msg, (screen.get_width()//2 - msg.get_width()//2, 200))
     screen.blit(tmsg, (screen.get_width()//2 - tmsg.get_width()//2, 300))
     screen.blit(smsg, (screen.get_width()//2 - smsg.get_width()//2, 350))
+    screen.blit(dmsg, (screen.get_width()//2 - dmsg.get_width()//2, 400))
+    screen.blit(emsg, (screen.get_width()//2 - emsg.get_width()//2, 450))
     pygame.display.flip()
 
 if __name__ == '__main__':
