@@ -1,5 +1,5 @@
 import pygame
-from configs.config import BG_COLOR
+from GAME.configs.config import BG_COLOR
 
 def draw_custom_input(screen, width_str, height_str, active_field):
     screen.fill(BG_COLOR)

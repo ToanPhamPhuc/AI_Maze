@@ -3,7 +3,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import random
 import pygame
-from configs.config import *
+from GAME.configs.config import *
 from maze.maze import Maze
 from utils.highscore import get_highscore_filename, load_highscore, save_highscore
 from ui.menu import draw_menu

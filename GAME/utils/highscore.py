@@ -1,5 +1,5 @@
 import os
-from configs.config import SCORES_DIR
+from GAME.configs.config import SCORES_DIR
 
 def get_highscore_filename(diff, w=None, h=None):
     base = SCORES_DIR

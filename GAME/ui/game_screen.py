@@ -1,5 +1,5 @@
 import pygame
-from configs.config import (
+from GAME.configs.config import (
     WALL_COLOR, PATH_COLOR, PLAYER_COLOR, EXIT_COLOR, START_COLOR, BG_COLOR, PLAYER_TRAIL_COLOR
 )
 

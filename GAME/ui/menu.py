@@ -1,5 +1,5 @@
 import pygame
-from configs.config import BG_COLOR, MENU_OPTIONS
+from GAME.configs.config import BG_COLOR, MENU_OPTIONS
 
 def format_time(seconds):
     d = seconds // 86400
