@@ -188,15 +188,15 @@ class BotRunner:
 
     def on_expand(self, pos):
         """Callback for when a node is expanded - for animation"""
-        if self.screen and self.is_running:
-            # Add to bot's own expanded set
+        if self.is_running:
             self.expanded.add(pos)
-            # Only render periodically to avoid lag
-            current_time = pygame.time.get_ticks()
-            if current_time - self.last_render_time > self.render_interval:
-                self.render_bot()
-                self.last_render_time = current_time
-            time.sleep(0.02)  # Slow down the search for visible animation
+            # Adaptive sleep: slower for small mazes, faster for big
+            if len(self.expanded) < 1000:
+                time.sleep(0.01)
+            elif len(self.expanded) < 5000:
+                time.sleep(0.005)
+            else:
+                time.sleep(0.001)
 
     def render_bot(self):
         """Render this bot's maze"""
@@ -218,8 +218,8 @@ class BotRunner:
                 else:
                     pygame.draw.rect(self.screen, (200, 200, 200), rect)  # Path
         
-        # Draw expanded nodes using bot's own expanded set
-        for (ey, ex) in self.expanded:
+        # Draw expanded nodes using a copy of bot's own expanded set
+        for (ey, ex) in list(self.expanded):
             rect = pygame.Rect(self.x_offset + ex * self.cell_size, self.y_offset + ey * self.cell_size, self.cell_size, self.cell_size)
             pygame.draw.rect(self.screen, (100, 150, 255), rect)
         
@@ -426,6 +426,7 @@ def run_comparison(screen, width, height):
     running = True
     last_update_time = 0
     update_interval = 16  # ~60 FPS updates
+    fps_font = pygame.font.SysFont(None, 24)
     
     while running:
         current_time = pygame.time.get_ticks()
@@ -486,6 +487,11 @@ def run_comparison(screen, width, height):
             title_font = pygame.font.SysFont(None, 36)
             title_text = title_font.render('Pathfinding Algorithms Comparison', True, (255, 255, 255))
             screen.blit(title_text, (screen_width//2 - title_text.get_width()//2, 10))
+            
+            # Draw FPS in top right
+            fps = int(clock.get_fps())
+            fps_text = fps_font.render(f'FPS: {fps}', True, (255, 255, 0))
+            screen.blit(fps_text, (screen_width - fps_text.get_width() - 20, 10))
             
             pygame.display.flip()
             last_update_time = current_time
