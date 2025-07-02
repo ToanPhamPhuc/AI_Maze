@@ -7,7 +7,16 @@ import threading
 from collections import deque
 import heapq
 from Dijkstra.scripts.environment import MazeEnvironment
-from GAME.configs.config import MIN_SCREEN_W, MIN_SCREEN_H, DEFAULT_CELL_SIZE
+from GAME.ui.menu import draw_menu
+from GAME.ui.custom_input import draw_custom_input
+from GAME.configs.config import MENU_OPTIONS, SCORES_DIR, MIN_SCREEN_W, MIN_SCREEN_H, DEFAULT_CELL_SIZE
+
+# Map menu options to maze sizes
+DIFFICULTY_MAP = {
+    0: (3, 3),   # Beginner
+    1: (8, 8),   # Intermediate
+    2: (16, 16), # Expert
+}
 
 # Algorithm implementations
 def manhattan_distance(pos1, pos2):
@@ -40,6 +49,9 @@ def solve_dijkstra(env, on_expand=None, delay=0, screen=None):
                     env.expanded.add(npos)
                     if on_expand:
                         on_expand(npos)
+                    if delay > 0 and screen is not None:
+                        env.render(screen, show_solution=False, highlight=npos)
+                        pygame.time.delay(delay)
     env.solution_path = []
     return []
 
@@ -71,6 +83,9 @@ def solve_astar(env, on_expand=None, delay=0, screen=None):
                     env.expanded.add(npos)
                     if on_expand:
                         on_expand(npos)
+                    if delay > 0 and screen is not None:
+                        env.render(screen, show_solution=False, highlight=npos)
+                        pygame.time.delay(delay)
     env.solution_path = []
     return []
 
@@ -99,6 +114,9 @@ def solve_dfs(env, on_expand=None, delay=0, screen=None):
                     env.expanded.add(npos)
                     if on_expand:
                         on_expand(npos)
+                    if delay > 0 and screen is not None:
+                        env.render(screen, show_solution=False, highlight=npos)
+                        pygame.time.delay(delay)
     env.solution_path = []
     return []
 
@@ -128,6 +146,9 @@ def solve_bfs(env, on_expand=None, delay=0, screen=None):
                     env.expanded.add(npos)
                     if on_expand:
                         on_expand(npos)
+                    if delay > 0 and screen is not None:
+                        env.render(screen, show_solution=False, highlight=npos)
+                        pygame.time.delay(delay)
     env.solution_path = []
     return []
 
@@ -144,8 +165,12 @@ class BotRunner:
         self.end_time = None
         self.steps = 0
         self.expanded_count = 0
+        self.screen = None
+        self.x_offset = 0
+        self.y_offset = 0
+        self.cell_size = 0
 
-    def reset(self, width, height):
+    def reset(self, width, height, screen=None, x_offset=0, y_offset=0, cell_size=0):
         self.env = MazeEnvironment(height, width, DEFAULT_CELL_SIZE)
         self.env.reset()
         self.solution_path = []
@@ -155,10 +180,59 @@ class BotRunner:
         self.end_time = None
         self.steps = 0
         self.expanded_count = 0
+        self.screen = screen
+        self.x_offset = x_offset
+        self.y_offset = y_offset
+        self.cell_size = cell_size
+
+    def on_expand(self, pos):
+        """Callback for when a node is expanded - for animation"""
+        if self.screen:
+            self.render_bot()
+            pygame.time.delay(5)  # Small delay for animation
+
+    def render_bot(self):
+        """Render this bot's maze"""
+        if not self.env or not self.screen:
+            return
+        
+        # Draw maze
+        maze = self.env.maze.maze
+        for y in range(len(maze)):
+            for x in range(len(maze[0])):
+                rect = pygame.Rect(self.x_offset + x * self.cell_size, self.y_offset + y * self.cell_size, self.cell_size, self.cell_size)
+                cell = maze[y][x]
+                if cell == '#':
+                    pygame.draw.rect(self.screen, (50, 50, 50), rect)  # Wall
+                elif cell == 'S':
+                    pygame.draw.rect(self.screen, (0, 255, 0), rect)   # Start
+                elif cell == 'E':
+                    pygame.draw.rect(self.screen, (255, 0, 0), rect)   # End
+                else:
+                    pygame.draw.rect(self.screen, (200, 200, 200), rect)  # Path
+        
+        # Draw expanded nodes
+        for (ey, ex) in self.env.expanded:
+            rect = pygame.Rect(self.x_offset + ex * self.cell_size, self.y_offset + ey * self.cell_size, self.cell_size, self.cell_size)
+            pygame.draw.rect(self.screen, (100, 150, 255), rect)
+        
+        # Draw solution path
+        if self.solution_path:
+            for (py, px) in self.solution_path:
+                rect = pygame.Rect(self.x_offset + px * self.cell_size, self.y_offset + py * self.cell_size, self.cell_size, self.cell_size)
+                pygame.draw.rect(self.screen, self.color, rect, 2)
+        
+        # Draw player
+        py, px = self.env.maze.player
+        prect = pygame.Rect(self.x_offset + px * self.cell_size, self.y_offset + py * self.cell_size, self.cell_size, self.cell_size)
+        pygame.draw.rect(self.screen, (255, 255, 0), prect)
+        
+        # Draw border
+        pygame.draw.rect(self.screen, self.color, (self.x_offset, self.y_offset, len(maze[0]) * self.cell_size, len(maze) * self.cell_size), 3)
 
     def run(self):
         self.start_time = time.time()
-        self.solution_path = self.solve_func(self.env)
+        self.solution_path = self.solve_func(self.env, on_expand=self.on_expand)
         self.end_time = time.time()
         self.steps = len(self.solution_path) - 1 if self.solution_path else 0
         self.expanded_count = len(self.env.expanded)
@@ -171,45 +245,6 @@ def format_time(seconds):
     s = int(seconds % 60)
     ms = int((seconds - int(seconds)) * 1000)
     return '{}m {}s {}ms'.format(m, s, ms)
-
-def render_bot(screen, bot, x_offset, y_offset, cell_size):
-    """Render a single bot's maze and status"""
-    if not bot.env:
-        return
-    
-    # Draw maze
-    maze = bot.env.maze.maze
-    for y in range(len(maze)):
-        for x in range(len(maze[0])):
-            rect = pygame.Rect(x_offset + x * cell_size, y_offset + y * cell_size, cell_size, cell_size)
-            cell = maze[y][x]
-            if cell == '#':
-                pygame.draw.rect(screen, (50, 50, 50), rect)  # Wall
-            elif cell == 'S':
-                pygame.draw.rect(screen, (0, 255, 0), rect)   # Start
-            elif cell == 'E':
-                pygame.draw.rect(screen, (255, 0, 0), rect)   # End
-            else:
-                pygame.draw.rect(screen, (200, 200, 200), rect)  # Path
-    
-    # Draw expanded nodes
-    for (ey, ex) in bot.env.expanded:
-        rect = pygame.Rect(x_offset + ex * cell_size, y_offset + ey * cell_size, cell_size, cell_size)
-        pygame.draw.rect(screen, (100, 150, 255), rect)
-    
-    # Draw solution path
-    if bot.solution_path:
-        for (py, px) in bot.solution_path:
-            rect = pygame.Rect(x_offset + px * cell_size, y_offset + py * cell_size, cell_size, cell_size)
-            pygame.draw.rect(screen, bot.color, rect, 2)
-    
-    # Draw player
-    py, px = bot.env.maze.player
-    prect = pygame.Rect(x_offset + px * cell_size, y_offset + py * cell_size, cell_size, cell_size)
-    pygame.draw.rect(screen, (255, 255, 0), prect)
-    
-    # Draw border
-    pygame.draw.rect(screen, bot.color, (x_offset, y_offset, len(maze[0]) * cell_size, len(maze) * cell_size), 3)
 
 def render_status(screen, bot, x_offset, y_offset, cell_size):
     """Render bot status information"""
@@ -235,9 +270,86 @@ def render_status(screen, bot, x_offset, y_offset, cell_size):
         status_text = small_font.render('Running...', True, (255, 255, 0))
         screen.blit(status_text, (x_offset, y_offset + len(bot.env.maze.maze) * cell_size + 5))
 
-def main():
-    pygame.init()
+def render_comparison_table(screen, bots, x_offset, y_offset):
+    """Render the comparison table on the right side"""
+    font = pygame.font.SysFont(None, 24)
+    small_font = pygame.font.SysFont(None, 18)
     
+    # Table title
+    title_text = font.render('Algorithm Comparison', True, (255, 255, 255))
+    screen.blit(title_text, (x_offset, y_offset))
+    
+    # Table headers
+    headers = ['Algorithm', 'Distance', 'Expanded', 'Place', 'Time']
+    header_y = y_offset + 40
+    
+    for i, header in enumerate(headers):
+        header_text = small_font.render(header, True, (200, 200, 200))
+        screen.blit(header_text, (x_offset + i * 80, header_y))
+    
+    # Calculate places based on completion time
+    finished_bots = [bot for bot in bots if bot.finished]
+    if finished_bots:
+        # Sort by completion time (faster = better place)
+        finished_bots.sort(key=lambda b: b.end_time - b.start_time if b.start_time and b.end_time else float('inf'))
+        
+        # Assign places
+        for i, bot in enumerate(finished_bots):
+            bot.place = i + 1
+    
+    # Table data
+    data_y = header_y + 30
+    for bot in bots:
+        # Algorithm name
+        name_text = small_font.render(bot.name, True, bot.color)
+        screen.blit(name_text, (x_offset, data_y))
+        
+        if bot.finished:
+            # Distance
+            distance_text = small_font.render(str(bot.steps), True, (255, 255, 255))
+            screen.blit(distance_text, (x_offset + 80, data_y))
+            
+            # Expanded
+            expanded_text = small_font.render(str(bot.expanded_count), True, (255, 255, 255))
+            screen.blit(expanded_text, (x_offset + 160, data_y))
+            
+            # Place
+            place_text = small_font.render(str(getattr(bot, 'place', '-')), True, (255, 255, 255))
+            screen.blit(place_text, (x_offset + 240, data_y))
+            
+            # Time
+            elapsed = bot.end_time - bot.start_time if bot.start_time and bot.end_time else None
+            time_text = small_font.render(format_time(elapsed), True, (255, 255, 255))
+            screen.blit(time_text, (x_offset + 320, data_y))
+        else:
+            # Show "Running..." for unfinished bots
+            running_text = small_font.render('Running...', True, (255, 255, 0))
+            screen.blit(running_text, (x_offset + 80, data_y))
+        
+        data_y += 25
+
+def render_controls(screen, x_offset, y_offset):
+    """Render the controls section"""
+    font = pygame.font.SysFont(None, 20)
+    small_font = pygame.font.SysFont(None, 16)
+    
+    # Controls title
+    title_text = font.render('Controls', True, (255, 255, 255))
+    screen.blit(title_text, (x_offset, y_offset))
+    
+    # Control instructions
+    controls = [
+        'R - Generate new maze',
+        'ESC - Back to menu',
+        'Q - Quit game'
+    ]
+    
+    for i, control in enumerate(controls):
+        control_text = small_font.render(control, True, (200, 200, 200))
+        screen.blit(control_text, (x_offset, y_offset + 30 + i * 20))
+
+def run_comparison(screen, width, height):
+    """Run the comparison with the specified maze size"""
     # Create bots
     bots = [
         BotRunner("Dijkstra", solve_dijkstra, (0, 255, 0)),      # Green
@@ -246,27 +358,49 @@ def main():
         BotRunner("BFS", solve_bfs, (255, 255, 0))               # Yellow
     ]
     
-    # Calculate screen size for 2x2 grid with minimum 1366x768
-    maze_size = 10  # 10x10 maze for better visibility
-    cell_size = 20  # Larger cells for better visibility
+    # Calculate layout for 1366x768 minimum resolution
+    maze_size = width
+    cell_size = 15  # Smaller cells to fit 4 mazes + table
     maze_pixel_size = maze_size * 2 + 1  # Account for wall cells
     total_maze_size = maze_pixel_size * cell_size
     
-    # Calculate minimum required screen size
-    min_screen_width = total_maze_size * 2 + 100  # 2 mazes wide + padding
-    min_screen_height = total_maze_size * 2 + 150  # 2 mazes high + status area
+    # Layout calculations
+    # Left side: 2x2 grid of mazes
+    # Right side: comparison table and controls
+    left_width = total_maze_size * 2 + 50  # 2 mazes wide + padding
+    right_width = 400  # Space for table and controls
+    total_width = left_width + right_width
     
     # Ensure minimum resolution of 1366x768
-    screen_width = max(1366, min_screen_width)
-    screen_height = max(768, min_screen_height)
+    screen_width = max(1366, total_width)
+    screen_height = max(768, total_maze_size * 2 + 100)  # 2 mazes high + status area
     
-    screen = pygame.display.set_mode((screen_width, screen_height))
-    pygame.display.set_caption('Pathfinding Algorithms Comparison')
+    # Resize screen if needed
+    if screen.get_size() != (screen_width, screen_height):
+        screen = pygame.display.set_mode((screen_width, screen_height))
+    
     clock = pygame.time.Clock()
     
-    # Initialize bots with same maze
-    for bot in bots:
-        bot.reset(maze_size, maze_size)
+    # Calculate positions for the mazes (left side)
+    start_x = 25
+    start_y = 50
+    
+    # Create ONE shared maze environment for all bots
+    shared_env = MazeEnvironment(height, width, DEFAULT_CELL_SIZE)
+    shared_env.reset()
+    
+    # Initialize bots with the SAME maze
+    positions = [
+        (start_x, start_y),                                    # Top-left: Dijkstra
+        (start_x + total_maze_size, start_y),                  # Top-right: A*
+        (start_x, start_y + total_maze_size),                  # Bottom-left: DFS
+        (start_x + total_maze_size, start_y + total_maze_size) # Bottom-right: BFS
+    ]
+    
+    for i, bot in enumerate(bots):
+        bot.reset(maze_size, maze_size, screen, positions[i][0], positions[i][1], cell_size)
+        # Set all bots to use the same maze environment
+        bot.env = shared_env
     
     # Start all bots in separate threads
     threads = []
@@ -281,16 +415,26 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
+                if event.key == pygame.K_q:
                     running = False
+                elif event.key == pygame.K_ESCAPE:
+                    # Return to menu
+                    for thread in threads:
+                        thread.join()
+                    return screen
                 elif event.key == pygame.K_r:  # Restart
                     # Wait for current threads to finish
                     for thread in threads:
                         thread.join()
                     
-                    # Reset and restart all bots
-                    for bot in bots:
-                        bot.reset(maze_size, maze_size)
+                    # Create a new shared maze environment
+                    shared_env = MazeEnvironment(height, width, DEFAULT_CELL_SIZE)
+                    shared_env.reset()
+                    
+                    # Reset and restart all bots with the new shared maze
+                    for i, bot in enumerate(bots):
+                        bot.reset(maze_size, maze_size, screen, positions[i][0], positions[i][1], cell_size)
+                        bot.env = shared_env
                     
                     threads = []
                     for bot in bots:
@@ -301,36 +445,25 @@ def main():
         # Clear screen
         screen.fill((30, 30, 30))
         
-        # Calculate centered positions for the mazes
-        start_x = (screen_width - total_maze_size * 2) // 2
-        start_y = (screen_height - total_maze_size * 2) // 2
-        
-        # Render all bots
-        positions = [
-            (start_x, start_y),                                    # Top-left: Dijkstra
-            (start_x + total_maze_size, start_y),                  # Top-right: A*
-            (start_x, start_y + total_maze_size),                  # Bottom-left: DFS
-            (start_x + total_maze_size, start_y + total_maze_size) # Bottom-right: BFS
-        ]
-        
+        # Render all bots (left side)
         for i, bot in enumerate(bots):
-            render_bot(screen, bot, positions[i][0], positions[i][1], cell_size)
+            bot.render_bot()
             render_status(screen, bot, positions[i][0], positions[i][1], cell_size)
+        
+        # Render comparison table (right side)
+        table_x = left_width + 25
+        table_y = 50
+        render_comparison_table(screen, bots, table_x, table_y)
+        
+        # Render controls (right side, below table)
+        controls_x = left_width + 25
+        controls_y = table_y + 200
+        render_controls(screen, controls_x, controls_y)
         
         # Draw title
         title_font = pygame.font.SysFont(None, 36)
         title_text = title_font.render('Pathfinding Algorithms Comparison', True, (255, 255, 255))
         screen.blit(title_text, (screen_width//2 - title_text.get_width()//2, 10))
-        
-        # Draw instructions
-        instruction_font = pygame.font.SysFont(None, 20)
-        instructions = [
-            'Press R to restart with new maze',
-            'Press Q or ESC to quit'
-        ]
-        for i, instruction in enumerate(instructions):
-            inst_text = instruction_font.render(instruction, True, (150, 150, 150))
-            screen.blit(inst_text, (10, screen_height - 40 + i * 15))
         
         pygame.display.flip()
         clock.tick(30)
@@ -339,6 +472,108 @@ def main():
     for thread in threads:
         thread.join()
     
+    return screen
+
+def main():
+    pygame.init()
+    screen = pygame.display.set_mode((MIN_SCREEN_W, MIN_SCREEN_H))
+    pygame.display.set_caption('Pathfinding Algorithms Comparison')
+    clock = pygame.time.Clock()
+    running = True
+    selected_idx = 0
+    
+    while running:
+        option_rects = draw_menu(screen, selected_idx, highscores={
+            'Beginner': (None, None),
+            'Intermediate': (None, None),
+            'Expert': (None, None),
+        })
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    selected_idx = (selected_idx - 1) % len(MENU_OPTIONS)
+                elif event.key == pygame.K_DOWN:
+                    selected_idx = (selected_idx + 1) % len(MENU_OPTIONS)
+                elif event.key == pygame.K_RETURN:
+                    if selected_idx == 3:  # Custom
+                        # Custom input
+                        width, height = 8, 8
+                        width_str, height_str = '', ''
+                        active_field = 'width'
+                        custom_done = False
+                        while not custom_done:
+                            draw_custom_input(screen, width_str, height_str, active_field)
+                            for event in pygame.event.get():
+                                if event.type == pygame.QUIT:
+                                    pygame.quit()
+                                    sys.exit()
+                                elif event.type == pygame.KEYDOWN:
+                                    if event.key == pygame.K_TAB:
+                                        active_field = 'height' if active_field == 'width' else 'width'
+                                    elif event.key == pygame.K_RETURN:
+                                        if width_str.isdigit() and height_str.isdigit():
+                                            width, height = int(width_str), int(height_str)
+                                            custom_done = True
+                                    elif event.key == pygame.K_BACKSPACE:
+                                        if active_field == 'width':
+                                            width_str = width_str[:-1]
+                                        else:
+                                            height_str = height_str[:-1]
+                                    elif event.unicode.isdigit():
+                                        if active_field == 'width':
+                                            width_str += event.unicode
+                                        else:
+                                            height_str += event.unicode
+                        screen = run_comparison(screen, width, height)
+                    elif selected_idx == 4:  # Quit
+                        running = False
+                    else:
+                        width, height = DIFFICULTY_MAP[selected_idx]
+                        screen = run_comparison(screen, width, height)
+                elif event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
+                    running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                for i, rect in enumerate(option_rects):
+                    if rect.collidepoint(event.pos):
+                        selected_idx = i
+                        if i == 3:  # Custom
+                            # Custom input (same as above)
+                            width, height = 8, 8
+                            width_str, height_str = '', ''
+                            active_field = 'width'
+                            custom_done = False
+                            while not custom_done:
+                                draw_custom_input(screen, width_str, height_str, active_field)
+                                for event in pygame.event.get():
+                                    if event.type == pygame.QUIT:
+                                        pygame.quit()
+                                        sys.exit()
+                                    elif event.type == pygame.KEYDOWN:
+                                        if event.key == pygame.K_TAB:
+                                            active_field = 'height' if active_field == 'width' else 'width'
+                                        elif event.key == pygame.K_RETURN:
+                                            if width_str.isdigit() and height_str.isdigit():
+                                                width, height = int(width_str), int(height_str)
+                                                custom_done = True
+                                        elif event.key == pygame.K_BACKSPACE:
+                                            if active_field == 'width':
+                                                width_str = width_str[:-1]
+                                            else:
+                                                height_str = height_str[:-1]
+                                        elif event.unicode.isdigit():
+                                            if active_field == 'width':
+                                                width_str += event.unicode
+                                            else:
+                                                height_str += event.unicode
+                            screen = run_comparison(screen, width, height)
+                        elif i == 4:  # Quit
+                            running = False
+                        else:
+                            width, height = DIFFICULTY_MAP[i]
+                            screen = run_comparison(screen, width, height)
+        clock.tick(30)
     pygame.quit()
 
 if __name__ == '__main__':
