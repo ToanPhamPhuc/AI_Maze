@@ -371,9 +371,9 @@ def run_comparison(screen, width, height):
         BotRunner("BFS", solve_bfs, (255, 255, 0))               # Yellow
     ]
     
-    # Calculate max allowed grid area (2/3 of 1366x768)
+    # Calculate max allowed grid area (2/3 of 1366x768, but max height 750px)
     max_grid_width = int(1366 * 2 / 3)
-    max_grid_height = int(768 * 2 / 3)
+    max_grid_height = 750  # Limit height to 750px
     maze_size = width
     maze_pixel_size = maze_size * 2 + 1  # Account for wall cells
     # Compute cell size so that 2x2 grid fits in max area
