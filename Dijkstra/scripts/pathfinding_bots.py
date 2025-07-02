@@ -46,7 +46,6 @@ def solve_dijkstra(env, on_expand=None, delay=0, screen=None):
                 if npos not in visited:
                     visited.add(npos)
                     queue.append((npos, path + [npos]))
-                    env.expanded.add(npos)
                     if on_expand:
                         on_expand(npos)
                     if delay > 0 and screen is not None:
@@ -80,7 +79,6 @@ def solve_astar(env, on_expand=None, delay=0, screen=None):
                     new_f = new_g + manhattan_distance(npos, goal)
                     new_path = path + [npos]
                     heapq.heappush(queue, (new_f, new_g, npos, new_path))
-                    env.expanded.add(npos)
                     if on_expand:
                         on_expand(npos)
                     if delay > 0 and screen is not None:
@@ -111,7 +109,6 @@ def solve_dfs(env, on_expand=None, delay=0, screen=None):
                 if npos not in visited:
                     visited.add(npos)
                     stack.append((npos, path + [npos]))
-                    env.expanded.add(npos)
                     if on_expand:
                         on_expand(npos)
                     if delay > 0 and screen is not None:
@@ -143,7 +140,6 @@ def solve_bfs(env, on_expand=None, delay=0, screen=None):
                 if npos not in visited:
                     visited.add(npos)
                     queue.append((npos, path + [npos]))
-                    env.expanded.add(npos)
                     if on_expand:
                         on_expand(npos)
                     if delay > 0 and screen is not None:
@@ -159,7 +155,7 @@ class BotRunner:
         self.color = color
         self.env = None
         self.solution_path = []
-        self.expanded = set()
+        self.expanded = set()  # Each bot has its own expanded set
         self.finished = False
         self.start_time = None
         self.end_time = None
@@ -169,12 +165,15 @@ class BotRunner:
         self.x_offset = 0
         self.y_offset = 0
         self.cell_size = 0
+        self.is_running = False
+        self.last_render_time = 0
+        self.render_interval = 50  # Render every 50ms
 
     def reset(self, width, height, screen=None, x_offset=0, y_offset=0, cell_size=0):
         self.env = MazeEnvironment(height, width, DEFAULT_CELL_SIZE)
         self.env.reset()
         self.solution_path = []
-        self.expanded = set()
+        self.expanded = set()  # Reset bot's own expanded set
         self.finished = False
         self.start_time = None
         self.end_time = None
@@ -184,12 +183,19 @@ class BotRunner:
         self.x_offset = x_offset
         self.y_offset = y_offset
         self.cell_size = cell_size
+        self.is_running = False
+        self.last_render_time = 0
 
     def on_expand(self, pos):
         """Callback for when a node is expanded - for animation"""
-        if self.screen:
-            self.render_bot()
-            pygame.time.delay(5)  # Small delay for animation
+        if self.screen and self.is_running:
+            # Add to bot's own expanded set
+            self.expanded.add(pos)
+            # Only render periodically to avoid lag
+            current_time = pygame.time.get_ticks()
+            if current_time - self.last_render_time > self.render_interval:
+                self.render_bot()
+                self.last_render_time = current_time
 
     def render_bot(self):
         """Render this bot's maze"""
@@ -211,8 +217,8 @@ class BotRunner:
                 else:
                     pygame.draw.rect(self.screen, (200, 200, 200), rect)  # Path
         
-        # Draw expanded nodes
-        for (ey, ex) in self.env.expanded:
+        # Draw expanded nodes using bot's own expanded set
+        for (ey, ex) in self.expanded:
             rect = pygame.Rect(self.x_offset + ex * self.cell_size, self.y_offset + ey * self.cell_size, self.cell_size, self.cell_size)
             pygame.draw.rect(self.screen, (100, 150, 255), rect)
         
@@ -231,12 +237,17 @@ class BotRunner:
         pygame.draw.rect(self.screen, self.color, (self.x_offset, self.y_offset, len(maze[0]) * self.cell_size, len(maze) * self.cell_size), 3)
 
     def run(self):
+        self.is_running = True
         self.start_time = time.time()
         self.solution_path = self.solve_func(self.env, on_expand=self.on_expand)
         self.end_time = time.time()
         self.steps = len(self.solution_path) - 1 if self.solution_path else 0
-        self.expanded_count = len(self.env.expanded)
+        self.expanded_count = len(self.expanded)  # Use bot's own expanded set
         self.finished = True
+        self.is_running = False
+        # Final render to show complete result
+        if self.screen:
+            self.render_bot()
 
 def format_time(seconds):
     if seconds is None:
@@ -410,7 +421,12 @@ def run_comparison(screen, width, height):
         threads.append(thread)
     
     running = True
+    last_update_time = 0
+    update_interval = 16  # ~60 FPS updates
+    
     while running:
+        current_time = pygame.time.get_ticks()
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -436,37 +452,42 @@ def run_comparison(screen, width, height):
                         bot.reset(maze_size, maze_size, screen, positions[i][0], positions[i][1], cell_size)
                         bot.env = shared_env
                     
+                    # Start new threads
                     threads = []
                     for bot in bots:
                         thread = threading.Thread(target=bot.run)
                         thread.start()
                         threads.append(thread)
         
-        # Clear screen
-        screen.fill((30, 30, 30))
+        # Update screen at consistent intervals
+        if current_time - last_update_time > update_interval:
+            # Clear screen
+            screen.fill((30, 30, 30))
+            
+            # Render all bots (left side)
+            for i, bot in enumerate(bots):
+                bot.render_bot()
+                render_status(screen, bot, positions[i][0], positions[i][1], cell_size)
+            
+            # Render comparison table (right side)
+            table_x = left_width + 25
+            table_y = 50
+            render_comparison_table(screen, bots, table_x, table_y)
+            
+            # Render controls (right side, below table)
+            controls_x = left_width + 25
+            controls_y = table_y + 200
+            render_controls(screen, controls_x, controls_y)
+            
+            # Draw title
+            title_font = pygame.font.SysFont(None, 36)
+            title_text = title_font.render('Pathfinding Algorithms Comparison', True, (255, 255, 255))
+            screen.blit(title_text, (screen_width//2 - title_text.get_width()//2, 10))
+            
+            pygame.display.flip()
+            last_update_time = current_time
         
-        # Render all bots (left side)
-        for i, bot in enumerate(bots):
-            bot.render_bot()
-            render_status(screen, bot, positions[i][0], positions[i][1], cell_size)
-        
-        # Render comparison table (right side)
-        table_x = left_width + 25
-        table_y = 50
-        render_comparison_table(screen, bots, table_x, table_y)
-        
-        # Render controls (right side, below table)
-        controls_x = left_width + 25
-        controls_y = table_y + 200
-        render_controls(screen, controls_x, controls_y)
-        
-        # Draw title
-        title_font = pygame.font.SysFont(None, 36)
-        title_text = title_font.render('Pathfinding Algorithms Comparison', True, (255, 255, 255))
-        screen.blit(title_text, (screen_width//2 - title_text.get_width()//2, 10))
-        
-        pygame.display.flip()
-        clock.tick(30)
+        clock.tick(60)  # Cap at 60 FPS
     
     # Wait for threads to finish
     for thread in threads:
